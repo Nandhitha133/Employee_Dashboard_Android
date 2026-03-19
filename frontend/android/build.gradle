@@ -1,0 +1,57 @@
+buildscript {
+    ext {
+        buildToolsVersion = "36.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 36
+        compileSdk = 36
+        targetSdkVersion = 36
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.1.20"
+        REACT_NATIVE_NODE_MODULES_DIR = file("../node_modules/react-native")
+    }
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+    configurations.all {
+        resolutionStrategy {
+            force "com.facebook.react:react-android:0.84.0"
+            force "com.facebook.react:hermes-android:0.84.0"
+        }
+    }
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                if (project.android.hasProperty("compileSdkVersion")) {
+                    compileSdkVersion 36
+                }
+                if (project.android.hasProperty("buildToolsVersion")) {
+                    buildToolsVersion "36.0.0"
+                }
+                if (project.android.hasProperty("defaultConfig")) {
+                    project.android.defaultConfig {
+                        if (project.android.defaultConfig.hasProperty("targetSdkVersion")) {
+                            targetSdkVersion 36
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"

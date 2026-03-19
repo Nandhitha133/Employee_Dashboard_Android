@@ -1,0 +1,21 @@
+{
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/.git/**"
+    ],
+    "gradle.nestedProjects": false,
+    "java.configuration.updateBuildConfiguration": "disabled",
+    "json.format.enable": true,
+    "json.validate.enable": false,
+    "gradle.debug.all": false,
+    "java.project.resourceFilters": [
+        "**/node_modules/**",
+        "**/.git/**"
+    ],
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/.git/**": true
+    },
+    "gradle.autoDetect": "off",
+    "java.autobuild.enabled": false
+}
