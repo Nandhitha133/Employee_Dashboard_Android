@@ -47,6 +47,17 @@ import PolicyPortalScreen from './src/screens/PolicyPortalScreen';
 import UserAccessScreen from './src/screens/UserAccessScreen';
 import EmployeeAttendanceScreen from './src/screens/EmployeeAttendanceScreen';
 import PFGratuitySummaryScreen from './src/screens/SalarySlips/PFGratuitySummaryScreen';
+import EditInOutTimeScreen from './src/screens/AdminTimesheet/EditInOutTimeScreen';
+import SpecialPermissionScreen from './src/screens/AdminTimesheet/SpecialPermissionScreen';
+import AppraisalWorkflowScreen from './src/screens/Performance/AppraisalWorkflowScreen';
+import AppraisalMasterScreen from './src/screens/Performance/AppraisalMasterScreen';
+import IncrementSummaryScreen from './src/screens/Performance/IncrementSummaryScreen';
+import AttendanceSummaryScreen from './src/screens/Performance/AttendanceSummaryScreen';
+import RegionalHolidayScreen from './src/screens/LeaveApplications/RegionalHolidayScreen';
+import MarriageAllowanceScreen from './src/screens/Payroll/MarriageAllowanceScreen';
+import UnifiedHubCalendarScreen from './src/screens/UnifiedHubCalendarScreen';
+import ResumeRepositoryScreen from './src/screens/ResumeRepositoryScreen';
+
 
 // Define Root Stack Param List
 export type RootStackParamList = {
@@ -64,6 +75,8 @@ export type RootStackParamList = {
   EmployeeAttendance: undefined;
   AdminTimesheet: undefined;
   TimesheetSummary: undefined;
+  EditInOutTime: undefined;
+  SpecialPermission: undefined;
   ProjectAllocation: undefined;
   ExitApproval: undefined;
   // Leave Management
@@ -84,7 +97,7 @@ export type RootStackParamList = {
   AttendanceApproval: undefined;
   // Company & Resources
   Insurance: undefined;
-  Policies: undefined;
+  PolicyPortal: undefined;
   ExitForm: undefined;
   Rewards: undefined;
   EmployeeManagement: undefined;
@@ -100,10 +113,16 @@ export type RootStackParamList = {
   ReviewerApproval: undefined;
   DirectorApproval: undefined;
   AppraisalWorkflow: undefined;
+  AppraisalMaster: undefined;
   IncrementMaster: undefined;
   IncrementSummary: undefined;
+  AttendanceSummary: undefined;
   HolidaysAllowance: undefined;
   TimeSheetHistory: undefined;
+  RegionalHoliday: undefined;
+  MarriageAllowance: undefined;
+  UnifiedHubCalendar: undefined;
+  ResumeRepository: undefined;
   
   // Profile
   MyProfile: { user?: any };
@@ -150,6 +169,14 @@ const App = () => {
             <Stack.Screen name="TeamAppraisal" component={TeamAppraisal} />
             <Stack.Screen name="ReviewerApproval" component={ReviewerApprovalScreen} />
             <Stack.Screen name="DirectorApproval" component={DirectorApprovalScreen} />
+            <Stack.Screen name="AppraisalWorkflow" component={AppraisalWorkflowScreen} />
+            <Stack.Screen name="AppraisalMaster" component={AppraisalMasterScreen} />
+            <Stack.Screen name="IncrementSummary" component={IncrementSummaryScreen} />
+            <Stack.Screen name="AttendanceSummary" component={AttendanceSummaryScreen} />
+            <Stack.Screen name="RegionalHoliday" component={RegionalHolidayScreen} />
+            <Stack.Screen name="MarriageAllowance" component={MarriageAllowanceScreen} />
+            <Stack.Screen name="UnifiedHubCalendar" component={UnifiedHubCalendarScreen} />
+            <Stack.Screen name="ResumeRepository" component={ResumeRepositoryScreen} />
            
             <Stack.Screen name="Insurance" component={InsuranceScreen} />
             <Stack.Screen name="LeaveSummary" component={LeaveSummaryScreen} />
@@ -160,10 +187,13 @@ const App = () => {
             <Stack.Screen name="AttendanceRegularization" component={AttendanceRegularizationScreen} />
             <Stack.Screen name="AdminTimesheet" component={AdminTimesheetScreen} />
             <Stack.Screen name="TimesheetSummary" component={TimesheetSummaryScreen} />
+            <Stack.Screen name="EditInOutTime" component={EditInOutTimeScreen} />
+            <Stack.Screen name="SpecialPermission" component={SpecialPermissionScreen} />
             <Stack.Screen name="TimeSheetHistory" component={TimesheetHistoryScreen} />
             <Stack.Screen name="SalarySlips" component={SalarySlipsScreen} />  
             <Stack.Screen name="Expenditure" component={ExpenditureManagementScreen} />
             <Stack.Screen name="HolidaysAllowance" component={HolidayAllowanceScreen} />
+            <Stack.Screen name="PolicyPortal" component={PolicyPortalScreen} />
             <Stack.Screen name="EmployeeManagement" component={EmployeeManagementScreen} />
             <Stack.Screen name="Announcements" component={AnnouncementManagementScreen} />
             <Stack.Screen name="TeamManagement" component={TeamManagementScreen} />
@@ -179,6 +209,7 @@ const App = () => {
             <Stack.Screen name="ExitApproval" component={ExitApprovalScreen} />
             <Stack.Screen name="AttendanceApproval" component={AttendanceApprovalScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="PFGratuitySummary" component={PFGratuitySummaryScreen} />
             
             <Stack.Screen name="UserAccess" component={UserAccessScreen} />
             <Stack.Screen name="EmployeeAttendance" component={EmployeeAttendanceScreen} />

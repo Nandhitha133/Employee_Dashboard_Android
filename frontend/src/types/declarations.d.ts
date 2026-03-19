@@ -87,3 +87,11 @@ declare module 'react-native-document-picker' {
 
   export function isCancel(error: any): boolean;
 }
+
+declare module 'react-native-confetti' {
+  import { Component } from 'react';
+  export default class Confetti extends Component<any> {
+    startConfetti(): void;
+    stopConfetti(): void;
+  }
+}
