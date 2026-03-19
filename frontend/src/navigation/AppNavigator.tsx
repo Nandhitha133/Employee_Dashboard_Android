@@ -80,7 +80,6 @@ export type RootStackParamList = {
   Internships: undefined;
   PFGratuitySummary: undefined;
   PayrollDetails: undefined;
-  CostToTheCompany: undefined;
   CompensationMaster: undefined;
   LoanSummary: undefined;
   GratuitySummary: undefined;

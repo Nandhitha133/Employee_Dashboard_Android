@@ -1638,14 +1638,14 @@ const TimesheetScreen = () => {
           backgroundColor: COLORS.white + '30', 
           borderRadius: 20, 
           width: 30, 
-          height: 30, 
+          height: 20, 
           justifyContent: 'center', 
           alignItems: 'center',
           marginRight: 10
         }}>
           <Icon name="add" size={18} color={COLORS.white} />
         </View>
-        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 13 }}>ADD PROJECT</Text>
+        <Text style={{ color: COLORS.white, fontWeight: '500', fontSize: 13}}>ADD PROJECT</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -1678,7 +1678,7 @@ const TimesheetScreen = () => {
         }}>
           <IconCommunity name="clock-outline" size={16} color={COLORS.white} />
         </View>
-        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 13 }}>ADD PERMISSION</Text>
+        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 12 }}>ADD PERMISSION</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -1724,7 +1724,7 @@ const TimesheetScreen = () => {
         }}>
           <Icon name="security" size={16} color={COLORS.white} />
         </View>
-        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 13 }}>SPECIAL PERM</Text>
+        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 12 }}>SPECIAL PERMISSION</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -1757,7 +1757,7 @@ const TimesheetScreen = () => {
         }}>
           <Icon name="save" size={16} color={COLORS.white} />
         </View>
-        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 13 }}>SAVE DRAFT</Text>
+        <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 12 }}>SAVE DRAFT</Text>
       </TouchableOpacity>
     </View>
   );

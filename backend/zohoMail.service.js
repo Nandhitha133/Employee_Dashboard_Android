@@ -12,6 +12,13 @@ async function sendZohoMail({ to, cc, subject, content, html, attachments }) {
       },
     });
 
+    console.log("Sending mail with options:", {
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      attachmentCount: attachments ? attachments.length : 0
+    });
+
     const mailOptions = {
       from: process.env.EMAIL_USER, // sender address
       to: to, // list of receivers

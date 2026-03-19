@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ExitFormality = require('../models/ExitFormality');
 const Employee = require('../models/Employee');
+const Notification = require('../models/Notification');
 const auth = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -199,6 +200,19 @@ router.post('/:id/submit', auth, async (req, res) => {
     item.submittedDate = new Date();
     item.currentStage = 'hr_review';
     await item.save();
+    try {
+      const admins = await require('../models/User').find({ role: 'admin' }).select('_id');
+      for (const admin of admins) {
+        await Notification.create({
+          recipient: admin._id,
+          title: 'Exit Form Submitted',
+          message: `An exit form has been submitted by ${item.employeeName || 'employee'}.`,
+          type: 'EXIT_SUBMIT'
+        });
+      }
+    } catch (err) {
+      console.error('Error creating exit submission notifications:', err);
+    }
     res.json({ success: true, data: item });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -247,6 +261,18 @@ router.post('/:id/reject', auth, async (req, res) => {
     item.currentStage = 'rejected';
     if (req.body.reason) item.rejectionReason = req.body.reason;
     await item.save();
+    try {
+      if (item.initiatedBy) {
+        await Notification.create({
+          recipient: item.initiatedBy,
+          title: 'Exit Form Rejected',
+          message: `Your exit form has been rejected.${req.body.reason ? ` Reason: ${req.body.reason}` : ''}`,
+          type: 'EXIT_REJECTED'
+        });
+      }
+    } catch (err) {
+      console.error('Error creating exit rejection notification:', err);
+    }
     res.json({ success: true, data: item });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -304,6 +330,18 @@ router.post('/:id/approve', auth, async (req, res) => {
     item.approvedByHR = req.user.id;
     
     await item.save();
+    try {
+      if (item.initiatedBy) {
+        await Notification.create({
+          recipient: item.initiatedBy,
+          title: 'Exit Form Approved',
+          message: 'Your exit form has been approved.',
+          type: 'EXIT_APPROVED'
+        });
+      }
+    } catch (err) {
+      console.error('Error creating exit approval notification:', err);
+    }
     res.json({ success: true, data: item });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -428,9 +466,9 @@ function addRelievingLetterContent(doc, exitForm) {
   const months = Math.floor(((lwd - joinDate) % (365 * 24 * 60 * 60 * 1000)) / (30 * 24 * 60 * 60 * 1000));
 
   // Company details (should be from your config)
-  const companyName = process.env.COMPANY_NAME || 'Your Company Name';
+  const companyName = process.env.COMPANY_NAME || 'Caldim Engineering Pvt Ltd';
   const companyAddress = process.env.COMPANY_ADDRESS || 'Your Company Address';
-  const hrManager = process.env.HR_MANAGER || 'HR Manager';
+  const hrManager = process.env.HR_MANAGER || 'Managing Director';
 
   // Header
   doc.fontSize(20).font('Helvetica-Bold').text(companyName, { align: 'center' });

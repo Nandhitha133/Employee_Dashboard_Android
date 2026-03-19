@@ -64,9 +64,9 @@ function addRelievingLetterContent(doc, exitForm) {
   const months = Math.floor(((lwd - joinDate) % (365 * 24 * 60 * 60 * 1000)) / (30 * 24 * 60 * 60 * 1000));
 
   // Company details (should be from your config)
-  const companyName = process.env.COMPANY_NAME || 'Your Company Name';
-  const companyAddress = process.env.COMPANY_ADDRESS || 'Your Company Address';
-  const hrManager = process.env.HR_MANAGER || 'HR Manager';
+  const companyName = process.env.COMPANY_NAME || 'Caldim Engineering Pvt Ltd';
+  const companyAddress = process.env.COMPANY_ADDRESS || '';
+  const hrManager = process.env.HR_MANAGER || 'Managing Director';
 
   // Header
   doc.fontSize(20).font('Helvetica-Bold').text(companyName, { align: 'center' });

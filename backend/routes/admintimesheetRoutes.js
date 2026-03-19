@@ -3,7 +3,9 @@ const express = require("express");
 const AdminTimesheet = require("../models/AdminTimesheet");
 const Timesheet = require("../models/Timesheet");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const Employee = require("../models/Employee");
+const Team = require("../models/Team");
 const nodemailer = require("nodemailer");
 const auth = require("../middleware/auth");
 
@@ -61,29 +63,70 @@ async function sendStatusEmail(updatedDoc, status) {
 
 const router = express.Router();
 
+async function getTeamManagementAssignmentSets(userEmployeeId) {
+  const teams = await Team.find({ teamCode: { $regex: /^TEAM-/i } })
+    .select("leaderEmployeeId members")
+    .lean();
+
+  const allAssigned = new Set();
+  const mine = new Set();
+
+  for (const t of teams) {
+    const members = Array.isArray(t.members) ? t.members : [];
+    for (const m of members) {
+      if (!m) continue;
+      allAssigned.add(m);
+      if (userEmployeeId && t.leaderEmployeeId === userEmployeeId) {
+        mine.add(m);
+      }
+    }
+  }
+
+  return {
+    allAssignedMemberIds: Array.from(allAssigned),
+    myAssignedMemberIds: Array.from(mine)
+  };
+}
+
 router.get("/list", auth, async (req, res) => {
   try {
     const { employeeId, division, location, status, week, project } = req.query;
-    let pmDivision = "";
-    let pmLocation = "";
-    const isPM = req.user?.role === "projectmanager" || req.user?.role === "project_manager";
-    if (isPM && req.user?.employeeId) {
-      try {
-        const pmEmp = await Employee.findOne({ employeeId: req.user.employeeId }).lean();
-        pmDivision = pmEmp?.division || "";
-        pmLocation = pmEmp?.location || "";
-      } catch (_) {}
-    }
+    const role = String(req.user?.role || "").toLowerCase();
+    const isAdmin = role === "admin";
+    const isPM = role === "projectmanager" || role === "project_manager";
+    const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user?.employeeId);
+
+    const divisionFilter = division && division !== "All Division" ? division : "";
+    const locationFilter = location && location !== "All Locations" ? location : "";
 
     let adminQuery = {};
-    if (employeeId) adminQuery.employeeId = employeeId;
-    if (isPM) {
-      if (pmDivision) adminQuery.division = pmDivision;
-      if (pmLocation) adminQuery.location = pmLocation;
+    if (isAdmin) {
+      if (employeeId) adminQuery.employeeId = employeeId;
+    } else if (isPM) {
+      if (employeeId) {
+        if (!myAssignedMemberIds.includes(employeeId)) {
+          return res.json({ success: true, data: [] });
+        }
+        adminQuery.employeeId = employeeId;
+      } else {
+        if (myAssignedMemberIds.length === 0) {
+          return res.json({ success: true, data: [] });
+        }
+        adminQuery.employeeId = { $in: myAssignedMemberIds };
+      }
     } else {
-      if (division && division !== "All Division") adminQuery.division = division;
-      if (location && location !== "All Locations") adminQuery.location = location;
+      if (employeeId) {
+        if (allAssignedMemberIds.includes(employeeId)) {
+          return res.json({ success: true, data: [] });
+        }
+        adminQuery.employeeId = employeeId;
+      } else if (allAssignedMemberIds.length > 0) {
+        adminQuery.employeeId = { $nin: allAssignedMemberIds };
+      }
     }
+
+    if (divisionFilter) adminQuery.division = divisionFilter;
+    if (locationFilter) adminQuery.location = locationFilter;
     if (status && status !== "All Status") adminQuery.status = status;
     if (week && week !== "All Weeks") adminQuery.week = week;
     if (project && project !== "All Projects") adminQuery["timeEntries.project"] = project;
@@ -198,13 +241,14 @@ router.get("/list", auth, async (req, res) => {
 
           // Apply filters to submitted records
           if (employeeId && record.employeeId !== employeeId) continue;
-          if (isPM) {
-            if (pmDivision && record.division !== pmDivision) continue;
-            if (pmLocation && record.location !== pmLocation) continue;
+          if (isAdmin) {
+          } else if (isPM) {
+            if (!myAssignedMemberIds.includes(record.employeeId)) continue;
           } else {
-            if (division && division !== "All Division" && record.division !== division) continue;
-            if (location && location !== "All Locations" && record.location !== location) continue;
+            if (allAssignedMemberIds.includes(record.employeeId)) continue;
           }
+          if (divisionFilter && record.division !== divisionFilter) continue;
+          if (locationFilter && record.location !== locationFilter) continue;
           if (week && week !== "All Weeks" && record.week !== week) continue;
           if (project && project !== "All Projects") {
             const hasProject = (record.timeEntries || []).some((te) => te.project === project);
@@ -261,8 +305,42 @@ router.get("/list", auth, async (req, res) => {
  * APPROVE Timesheet
  * /api/admin-timesheet/approve/:id
  */
-router.put("/approve/:id", async (req, res) => {
+router.put("/approve/:id", auth, async (req, res) => {
   try {
+    const role = String(req.user?.role || "").toLowerCase();
+    const allowedRoles = ["admin", "hr", "manager", "projectmanager", "project_manager"];
+    const hasAccess = allowedRoles.includes(role) || (req.user?.permissions || []).includes("admin_timesheet_access");
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const isAdmin = role === "admin";
+    const isPM = role === "projectmanager" || role === "project_manager";
+    const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user?.employeeId);
+
+    const candidateAdminDoc = await AdminTimesheet.findById(req.params.id).select("employeeId").lean();
+    let targetEmployeeId = String(candidateAdminDoc?.employeeId || "");
+    if (!targetEmployeeId) {
+      const sheet = await Timesheet.findById(req.params.id).select("employeeId userId").lean();
+      targetEmployeeId = String(sheet?.employeeId || "");
+      if (!targetEmployeeId && sheet?.userId) {
+        const u = await User.findById(sheet.userId).select("employeeId").lean();
+        targetEmployeeId = String(u?.employeeId || "");
+      }
+    }
+
+    if (!isAdmin && targetEmployeeId) {
+      if (isPM) {
+        if (!myAssignedMemberIds.includes(targetEmployeeId)) {
+          return res.status(403).json({ success: false, message: "Access denied" });
+        }
+      } else {
+        if (allAssignedMemberIds.includes(targetEmployeeId)) {
+          return res.status(403).json({ success: false, message: "Access denied" });
+        }
+      }
+    }
+
     let updated = await AdminTimesheet.findByIdAndUpdate(
       req.params.id,
       { status: "Approved", rejectionReason: "" },
@@ -345,6 +423,22 @@ router.put("/approve/:id", async (req, res) => {
     }
 
     await sendStatusEmail(updated, "Approved");
+
+    // Create notification to applicant
+    try {
+      const user = await User.findOne({ employeeId: updated.employeeId });
+      if (user) {
+        await Notification.create({
+          recipient: user._id,
+          title: 'Timesheet Approved',
+          message: `Your timesheet for week ${updated.week} has been approved.`,
+          type: 'TIMESHEET_APPROVED'
+        });
+      }
+    } catch (err) {
+      console.error('Error creating timesheet approval notification:', err);
+    }
+
     res.json({ success: true, message: "Timesheet approved", data: updated });
 
   } catch (err) {
@@ -357,9 +451,43 @@ router.put("/approve/:id", async (req, res) => {
  * REJECT Timesheet
  * /api/admin-timesheet/reject/:id
  */
-router.put("/reject/:id", async (req, res) => {
+router.put("/reject/:id", auth, async (req, res) => {
   try {
     const { reason } = req.body;
+
+    const role = String(req.user?.role || "").toLowerCase();
+    const allowedRoles = ["admin", "hr", "manager", "projectmanager", "project_manager"];
+    const hasAccess = allowedRoles.includes(role) || (req.user?.permissions || []).includes("admin_timesheet_access");
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const isAdmin = role === "admin";
+    const isPM = role === "projectmanager" || role === "project_manager";
+    const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user?.employeeId);
+
+    const candidateAdminDoc = await AdminTimesheet.findById(req.params.id).select("employeeId").lean();
+    let targetEmployeeId = String(candidateAdminDoc?.employeeId || "");
+    if (!targetEmployeeId) {
+      const sheet = await Timesheet.findById(req.params.id).select("employeeId userId").lean();
+      targetEmployeeId = String(sheet?.employeeId || "");
+      if (!targetEmployeeId && sheet?.userId) {
+        const u = await User.findById(sheet.userId).select("employeeId").lean();
+        targetEmployeeId = String(u?.employeeId || "");
+      }
+    }
+
+    if (!isAdmin && targetEmployeeId) {
+      if (isPM) {
+        if (!myAssignedMemberIds.includes(targetEmployeeId)) {
+          return res.status(403).json({ success: false, message: "Access denied" });
+        }
+      } else {
+        if (allAssignedMemberIds.includes(targetEmployeeId)) {
+          return res.status(403).json({ success: false, message: "Access denied" });
+        }
+      }
+    }
 
     let updated = await AdminTimesheet.findByIdAndUpdate(
       req.params.id,
@@ -446,6 +574,22 @@ router.put("/reject/:id", async (req, res) => {
     }
 
     await sendStatusEmail(updated, "Rejected");
+
+    // Create notification
+    try {
+      const user = await User.findOne({ employeeId: updated.employeeId });
+      if (user) {
+        await Notification.create({
+          recipient: user._id,
+          title: 'Timesheet Rejected',
+          message: `Your timesheet for week ${updated.week} has been rejected. Reason: ${reason || 'No reason provided'}`,
+          type: 'TIMESHEET_REJECTED'
+        });
+      }
+    } catch (err) {
+      console.error('Error creating timesheet rejection notification:', err);
+    }
+
     res.json({ success: true, message: "Timesheet rejected", data: updated });
 
   } catch (err) {
@@ -458,9 +602,20 @@ router.put("/reject/:id", async (req, res) => {
  * YEARLY SUMMARY
  * /api/admin-timesheet/summary?year=2025&project=X&employee=Y
  */
-router.get("/summary", async (req, res) => {
+router.get("/summary", auth, async (req, res) => {
   try {
     const { year, employee, project } = req.query;
+
+    const role = String(req.user?.role || "").toLowerCase();
+    const allowedRoles = ["admin", "hr", "manager", "projectmanager", "project_manager"];
+    const hasAccess = allowedRoles.includes(role) || (req.user?.permissions || []).includes("admin_timesheet_access");
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const isAdmin = role === "admin";
+    const isPM = role === "projectmanager" || role === "project_manager";
+    const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user?.employeeId);
 
     let match = {
       week: { $regex: `^${year}` }
@@ -468,6 +623,23 @@ router.get("/summary", async (req, res) => {
 
     if (employee && employee !== "All Employees") match.employeeName = employee;
     if (project && project !== "All Projects") match["timeEntries.project"] = project;
+
+    if (isAdmin) {
+    } else if (isPM) {
+      if (myAssignedMemberIds.length === 0) {
+        return res.json({
+          success: true,
+          summary: {
+            totalHours: 0,
+            totalEmployees: [],
+            totalProjects: []
+          }
+        });
+      }
+      match.employeeId = { $in: myAssignedMemberIds };
+    } else if (allAssignedMemberIds.length > 0) {
+      match.employeeId = { $nin: allAssignedMemberIds };
+    }
 
     const summary = await AdminTimesheet.aggregate([
       { $match: match },

@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Employee = require('../models/Employee');
+const Notification = require('../models/Notification');
 const auth = require('../middleware/auth');
 const otpGenerator = require('otp-generator');
 const { sendZohoMail } = require('../zohoMail.service');
@@ -40,6 +41,8 @@ router.post('/login', async (req, res) => {
 
     user.lastLogin = new Date();
     await user.save();
+
+  
 
     const token = jwt.sign(
       { id: user._id },

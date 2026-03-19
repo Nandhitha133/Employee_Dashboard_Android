@@ -5,10 +5,38 @@ const Employee = require('../models/Employee');
 const LeaveBalance = require('../models/LeaveBalance');
 const Timesheet = require('../models/Timesheet');
 const User = require('../models/User');
+const Team = require('../models/Team');
+const Notification = require('../models/Notification');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
+const { monthsBetween, calcBalanceForEmployee, mergeBalances } = require('../services/leaveService');
 
 const router = express.Router();
+
+async function getTeamManagementAssignmentSets(userEmployeeId) {
+  const teams = await Team.find({ teamCode: { $regex: /^TEAM-/i } })
+    .select('leaderEmployeeId members')
+    .lean();
+
+  const allAssigned = new Set();
+  const mine = new Set();
+
+  for (const t of teams) {
+    const members = Array.isArray(t.members) ? t.members : [];
+    for (const m of members) {
+      if (!m) continue;
+      allAssigned.add(m);
+      if (userEmployeeId && t.leaderEmployeeId === userEmployeeId) {
+        mine.add(m);
+      }
+    }
+  }
+
+  return {
+    allAssignedMemberIds: Array.from(allAssigned),
+    myAssignedMemberIds: Array.from(mine)
+  };
+}
 
 const mailer = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -50,6 +78,51 @@ async function getHrRecipients(employeeProfile) {
   const admins = await User.find({ role: 'admin' }).select('email');
   const emails = admins.map(u => u.email).filter(e => e && emailRegex.test(e));
   return Array.from(new Set(emails));
+}
+
+async function getAdminAndPMUserIds(employeeProfile) {
+  const recipientIds = new Set();
+  try {
+    // 1. Get Admins
+    const isHosur = String(employeeProfile?.location || '').trim().toLowerCase() === 'hosur';
+    if (isHosur) {
+      const admin = await User.findOne({ role: 'admin', employeeId: 'CDE025' }).select('_id');
+      if (admin) recipientIds.add(admin._id.toString());
+    } else {
+      const admins = await User.find({ role: 'admin' }).select('_id');
+      admins.forEach(u => recipientIds.add(u._id.toString()));
+    }
+
+    // 2. Get Project Managers
+    const division = employeeProfile?.division;
+    const location = employeeProfile?.location;
+
+    const roleRegex = /project\s*manager/i;
+    const empPMs = await Employee.find({
+      division: division || '',
+      location: location || '',
+      $or: [
+        { role: { $regex: roleRegex } },
+        { designation: { $regex: roleRegex } },
+        { position: { $regex: roleRegex } }
+      ]
+    }).select('employeeId');
+
+    const empIds = empPMs.map(e => e.employeeId).filter(Boolean);
+
+    if (empIds.length > 0) {
+      const userPMs = await User.find({
+        $or: [
+          { role: 'projectmanager', employeeId: { $in: empIds } },
+          { role: 'project_manager', employeeId: { $in: empIds } }
+        ]
+      }).select('_id');
+      userPMs.forEach(u => recipientIds.add(u._id.toString()));
+    }
+  } catch (err) {
+    console.error('Error finding notification recipients:', err);
+  }
+  return Array.from(recipientIds);
 }
 
 async function sendLeaveSubmissionEmail(createdDoc, user, employeeProfile) {
@@ -160,7 +233,7 @@ async function getLockedDaysForUser(userId, weekStartDate, weekEndDate) {
   try {
     const weekStart = new Date(weekStartDate);
     const weekEnd = new Date(weekEndDate);
-    
+
     const approvedLeaves = await LeaveApplication.find({
       userId: userId,
       status: 'Approved',
@@ -170,29 +243,25 @@ async function getLockedDaysForUser(userId, weekStartDate, weekEndDate) {
         { startDate: { $lte: weekStart }, endDate: { $gte: weekEnd } }
       ]
     });
-    
+
     const lockedDays = [false, false, false, false, false, false, false];
-    
+
     approvedLeaves.forEach(leave => {
       const start = new Date(leave.startDate);
       const end = new Date(leave.endDate);
-      
+
       // Loop through each day of the week
       for (let i = 0; i < 7; i++) {
         const currentDate = new Date(weekStart);
         currentDate.setDate(currentDate.getDate() + i);
-        
+
         // Check if currentDate is within leave period
         if (currentDate >= start && currentDate <= end) {
-          // Skip weekends if needed (optional)
-          const dayOfWeek = currentDate.getDay();
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Monday-Friday
-            lockedDays[i] = true;
-          }
+          lockedDays[i] = true;
         }
       }
     });
-    
+
     return lockedDays;
   } catch (error) {
     console.error("Error getting locked days:", error);
@@ -207,7 +276,7 @@ async function syncTimesheetWithLeave(leaveApp) {
 
   // Initialize loopDate to UTC midnight
   let loopDate = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
-  
+
   // Initialize endDateTime to UTC midnight
   const endDateTime = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
 
@@ -215,143 +284,144 @@ async function syncTimesheetWithLeave(leaveApp) {
   const timesheetCache = {};
 
   while (loopDate <= endDateTime) {
-      const weekStart = getMonday(loopDate);
-      const weekStartStr = weekStart.toISOString();
+    const weekStart = getMonday(loopDate);
+    const weekStartStr = weekStart.toISOString();
 
-      let timesheet;
-      
-      if (timesheetCache[weekStartStr]) {
-          timesheet = timesheetCache[weekStartStr];
+    let timesheet;
+
+    if (timesheetCache[weekStartStr]) {
+      timesheet = timesheetCache[weekStartStr];
+    } else {
+      // weekEnd should be Sunday midnight UTC
+      const weekEnd = new Date(weekStart);
+      weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+
+      timesheet = await Timesheet.findOne({
+        userId: userId,
+        weekStartDate: weekStart,
+        weekEndDate: weekEnd
+      });
+
+      if (!timesheet) {
+        console.log("Timesheet not found, creating new one.");
+        if (leaveApp.status !== 'Approved') {
+          // If not approving and timesheet doesn't exist, nothing to do for this week
+          loopDate.setUTCDate(loopDate.getUTCDate() + 1);
+          continue;
+        }
+        timesheet = new Timesheet({
+          userId: userId,
+          employeeId: leaveApp.employeeId,
+          employeeName: leaveApp.employeeName,
+          weekStartDate: weekStart,
+          weekEndDate: weekEnd,
+          entries: [],
+          status: 'Draft'
+        });
       } else {
-          // weekEnd should be Sunday midnight UTC
-          const weekEnd = new Date(weekStart);
-          weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+        console.log("Timesheet found:", timesheet._id);
+        // Ensure employee details are present
+        if (!timesheet.employeeId && leaveApp.employeeId) timesheet.employeeId = leaveApp.employeeId;
+        if (!timesheet.employeeName && leaveApp.employeeName) timesheet.employeeName = leaveApp.employeeName;
+      }
+      timesheetCache[weekStartStr] = timesheet;
+    }
 
-          timesheet = await Timesheet.findOne({
-              userId: userId,
-              weekStartDate: weekStart,
-              weekEndDate: weekEnd 
+    const dayIndex = Math.round((loopDate.getTime() - weekStart.getTime()) / (1000 * 3600 * 24));
+    console.log(`Processing date: ${loopDate.toISOString()}, dayIndex: ${dayIndex}`);
+
+    if (dayIndex >= 0 && dayIndex <= 6) {
+      const taskName = `Leave Approved (${leaveApp.leaveType})`;
+      let leaveEntry = timesheet.entries.find(e => e.project === 'Leave' && e.task === taskName);
+
+      if (leaveApp.status === 'Approved') {
+        if (!leaveEntry) {
+          console.log("Adding new Leave Approved entry.");
+          timesheet.entries.push({
+            project: 'Leave',
+            task: taskName,
+            type: 'leave',
+            hours: [0, 0, 0, 0, 0, 0, 0],
+            locked: true
+          });
+          leaveEntry = timesheet.entries[timesheet.entries.length - 1];
+        } else {
+          console.log("Updating existing Leave Approved entry.");
+          leaveEntry.locked = true;
+        }
+
+        // Set 9.5 hours (9:30) for full day leave, 4.75 for half day
+        const leaveHours = leaveApp.dayType === 'Half Day' ? 4.75 : 9.5;
+        console.log(`Setting ${leaveHours} hours for dayIndex ${dayIndex}`);
+        leaveEntry.hours.set(dayIndex, leaveHours);
+
+        // Mark all project entries for this day as locked if total leave hours >= 8
+        // This handles "Full Day" leave (9.5h) and "Half Day" + "Half Day" (4.75h + 4.75h = 9.5h)
+
+        // Calculate total leave hours for this day
+        const totalLeaveHours = timesheet.entries.reduce((sum, e) => {
+          if (e.type === 'leave' && (e.task || '').startsWith('Leave Approved')) {
+            return sum + (Number(e.hours[dayIndex]) || 0);
+          }
+          return sum;
+        }, 0);
+
+        const shouldLock = totalLeaveHours >= 8;
+
+        timesheet.entries.forEach(entry => {
+          if (entry.type === 'project') {
+            // Create a lockedDays array if it doesn't exist
+            if (!entry.lockedDays) {
+              entry.lockedDays = [false, false, false, false, false, false, false];
+            }
+            // Mark this day as locked if total leave hours cover the full day
+            entry.lockedDays[dayIndex] = shouldLock;
+          }
+        });
+      } else {
+        // Rejected or Pending - revert changes
+        if (leaveEntry) {
+          console.log(`Removing leave for dayIndex ${dayIndex}`);
+          // Reset hours to 0
+          leaveEntry.hours.set(dayIndex, 0);
+
+          // Unlock project entries for this day if no longer fully covered by leave
+          const totalLeaveHours = timesheet.entries.reduce((sum, e) => {
+            if (e.type === 'leave' && (e.task || '').startsWith('Leave Approved')) {
+              return sum + (Number(e.hours[dayIndex]) || 0);
+            }
+            return sum;
+          }, 0);
+          const shouldLock = totalLeaveHours >= 8;
+
+          timesheet.entries.forEach(entry => {
+            if (entry.type === 'project' && entry.lockedDays) {
+              entry.lockedDays[dayIndex] = shouldLock;
+            }
           });
 
-          if (!timesheet) {
-              console.log("Timesheet not found, creating new one.");
-              if (leaveApp.status !== 'Approved') {
-                  // If not approving and timesheet doesn't exist, nothing to do for this week
-                  loopDate.setUTCDate(loopDate.getUTCDate() + 1);
-                  continue;
-              }
-              timesheet = new Timesheet({
-                  userId: userId,
-                  employeeId: leaveApp.employeeId,
-                  employeeName: leaveApp.employeeName,
-                  weekStartDate: weekStart,
-                  weekEndDate: weekEnd,
-                  entries: [],
-                  status: 'Draft'
-              });
-          } else {
-             console.log("Timesheet found:", timesheet._id);
-             // Ensure employee details are present
-             if (!timesheet.employeeId && leaveApp.employeeId) timesheet.employeeId = leaveApp.employeeId;
-             if (!timesheet.employeeName && leaveApp.employeeName) timesheet.employeeName = leaveApp.employeeName;
+          // Check if row is now empty
+          const totalHours = leaveEntry.hours.reduce((a, b) => a + (Number(b) || 0), 0);
+          if (totalHours === 0) {
+            // Remove the entry if no hours left
+            console.log("Removing empty Leave Approved entry.");
+            timesheet.entries.pull(leaveEntry._id);
           }
-          timesheetCache[weekStartStr] = timesheet;
+        }
       }
+    }
 
-      const dayIndex = Math.round((loopDate.getTime() - weekStart.getTime()) / (1000 * 3600 * 24));
-      console.log(`Processing date: ${loopDate.toISOString()}, dayIndex: ${dayIndex}`);
-
-      if (dayIndex >= 0 && dayIndex <= 6) {
-          const taskName = `Leave Approved (${leaveApp.leaveType})`;
-          let leaveEntry = timesheet.entries.find(e => e.project === 'Leave' && e.task === taskName);
-          
-          if (leaveApp.status === 'Approved') {
-              if (!leaveEntry) {
-                  console.log("Adding new Leave Approved entry.");
-                  timesheet.entries.push({
-                      project: 'Leave',
-                      task: taskName,
-                      type: 'leave',
-                      hours: [0, 0, 0, 0, 0, 0, 0],
-                      locked: true
-                  });
-                  leaveEntry = timesheet.entries[timesheet.entries.length - 1];
-              } else {
-                 console.log("Updating existing Leave Approved entry.");
-                 leaveEntry.locked = true;
-              }
-              
-              // Set 9.5 hours (9:30) for full day leave, 4.75 for half day
-              const leaveHours = leaveApp.dayType === 'Half Day' ? 4.75 : 9.5;
-              console.log(`Setting ${leaveHours} hours for dayIndex ${dayIndex}`);
-              leaveEntry.hours.set(dayIndex, leaveHours);
-              
-              // Mark all project entries for this day as locked if total leave hours >= 8
-              // This handles "Full Day" leave (9.5h) and "Half Day" + "Half Day" (4.75h + 4.75h = 9.5h)
-              
-              // Calculate total leave hours for this day
-              const totalLeaveHours = timesheet.entries.reduce((sum, e) => {
-                  if (e.type === 'leave' && (e.task || '').startsWith('Leave Approved')) {
-                      return sum + (Number(e.hours[dayIndex]) || 0);
-                  }
-                  return sum;
-              }, 0);
-              
-              const shouldLock = totalLeaveHours >= 8;
-              
-              timesheet.entries.forEach(entry => {
-                  if (entry.type === 'project') {
-                      // Create a lockedDays array if it doesn't exist
-                      if (!entry.lockedDays) {
-                          entry.lockedDays = [false, false, false, false, false, false, false];
-                      }
-                      // Mark this day as locked if total leave hours cover the full day
-                      entry.lockedDays[dayIndex] = shouldLock;
-                  }
-              });
-          } else {
-              // Rejected or Pending - revert changes
-              if (leaveEntry) {
-                  console.log(`Removing leave for dayIndex ${dayIndex}`);
-                  // Reset hours to 0
-                  leaveEntry.hours.set(dayIndex, 0);
-                  
-                  // Unlock project entries for this day if no longer fully covered by leave
-                  const totalLeaveHours = timesheet.entries.reduce((sum, e) => {
-                      if (e.type === 'leave' && (e.task || '').startsWith('Leave Approved')) {
-                          return sum + (Number(e.hours[dayIndex]) || 0);
-                      }
-                      return sum;
-                  }, 0);
-                  const shouldLock = totalLeaveHours >= 8;
-
-                  timesheet.entries.forEach(entry => {
-                      if (entry.type === 'project' && entry.lockedDays) {
-                          entry.lockedDays[dayIndex] = shouldLock;
-                      }
-                  });
-                  
-                  // Check if row is now empty
-                  const totalHours = leaveEntry.hours.reduce((a, b) => a + (Number(b) || 0), 0);
-                  if (totalHours === 0) {
-                      // Remove the entry if no hours left
-                      console.log("Removing empty Leave Approved entry.");
-                      timesheet.entries.pull(leaveEntry._id);
-                  }
-              }
-          }
-      }
-      
-      loopDate.setUTCDate(loopDate.getUTCDate() + 1);
+    loopDate.setUTCDate(loopDate.getUTCDate() + 1);
   }
 
   // Save all modified timesheets
   for (const ts of Object.values(timesheetCache)) {
-      await ts.save();
+    await ts.save();
   }
 }
 
 function hasPermission(user, perm) {
+  if (user?.role === 'admin') return true;
   return Array.isArray(user?.permissions) && user.permissions.includes(perm);
 }
 
@@ -362,197 +432,11 @@ function countWorkingDays(startDate, endDate, dayType) {
   let count = 0;
   const cur = new Date(s);
   while (cur <= e) {
-    const d = cur.getDay();
-    if (d !== 0 && d !== 6) count++;
+    count++;
     cur.setDate(cur.getDate() + 1);
   }
   if (dayType === 'Half Day' && count === 1) return 0.5;
   return count;
-}
-
-function monthsBetween(startDate) {
-  const start = new Date(startDate);
-  if (isNaN(start.getTime())) return 0;
-  const now = new Date();
-  const years = now.getFullYear() - start.getFullYear();
-  const months = now.getMonth() - start.getMonth();
-  const total = years * 12 + months;
-  return Math.max(0, total);
-}
-
-function monthsBetweenRange(startDate, endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate || new Date());
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0;
-  const years = end.getFullYear() - start.getFullYear();
-  const months = end.getMonth() - start.getMonth();
-  const total = years * 12 + months;
-  return Math.max(0, total);
-}
-
-function toLower(s) {
-  return String(s || '').toLowerCase();
-}
-
-function calcBalanceForEmployee(emp, approvedLeaves = [], calculationDate = new Date()) {
-  const currentDate = new Date(calculationDate);
-  const currentYear = currentDate.getFullYear();
-  const position = emp.position || emp.role || '';
-  const doj = emp.dateOfJoining || emp.hireDate || emp.createdAt;
-  
-  // Use calculationDate for months of service
-  const mos = monthsBetween(doj, currentDate);
-  const isTrainee = toLower(position) === 'trainee' || toLower(position).includes('trainee');
-
-  // Derive trainee months from previous organizations if present
-  let traineeMonths = 0;
-  if (Array.isArray(emp.previousOrganizations) && emp.previousOrganizations.length > 0) {
-    const traineeOrg = emp.previousOrganizations.find((o) => toLower(o.position).includes('trainee'));
-    if (traineeOrg && (traineeOrg.startDate || doj)) {
-      const start = traineeOrg.startDate || doj;
-      const end = traineeOrg.endDate || new Date();
-      const totalMonths = monthsBetweenRange(start, end);
-      traineeMonths = Math.min(12, totalMonths);
-    }
-  }
-  if (isTrainee) {
-    traineeMonths = Math.min(12, mos);
-  }
-  const postTraineeMonths = Math.max(0, mos - traineeMonths);
-
-  let casual = 0, sick = 0;
-  let usedCL = 0, usedSL = 0;
-  
-  // CL/SL Rule: After 6 months of regular service (post-trainee)?
-  const afterSix = Math.max(postTraineeMonths - 6, 0);
-
-  if (currentYear >= 2026) {
-    // RESTART LOGIC FOR 2026 ONWARDS (Yearly Reset)
-    const yearStart = new Date(currentYear, 0, 1);
-    const dojDate = new Date(doj);
-
-    if (dojDate < yearStart) {
-      // Joined before current year
-      // Check if they have completed 6 months service
-      if (afterSix > 0) {
-        // Accrue based on months passed in CURRENT YEAR
-        // (currentMonth + 1) gives credit for current month
-        const monthsInYear = currentDate.getMonth() + 1;
-        casual = monthsInYear * 0.5;
-        sick = monthsInYear * 0.5;
-      } else {
-        // Still in probation
-        casual = 0;
-        sick = 0;
-      }
-    } else {
-      // Joined in current year
-      // Use standard accumulation logic (0 for first 6 months, then 0.5/month)
-      casual = afterSix * 0.5;
-      sick = afterSix * 0.5;
-    }
-
-    // Filter usage for CURRENT YEAR only
-    usedCL = approvedLeaves
-      .filter(l => l.leaveType === 'CL')
-      .filter(l => new Date(l.startDate).getFullYear() === currentYear)
-      .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
-
-    usedSL = approvedLeaves
-      .filter(l => l.leaveType === 'SL')
-      .filter(l => new Date(l.startDate).getFullYear() === currentYear)
-      .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
-
-  } else {
-    // OLD CUMULATIVE LOGIC (Pre-2026)
-    casual += afterSix * 0.5;
-    sick += afterSix * 0.5;
-
-    usedCL = approvedLeaves
-      .filter(l => l.leaveType === 'CL')
-      .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
-      
-    usedSL = approvedLeaves
-      .filter(l => l.leaveType === 'SL')
-      .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
-  }
-
-  const allocated = {
-    casual: casual,
-    sick: sick,
-    privilege: 0
-  };
-
-  // PL Logic
-  let plAllocated = 0;
-  let plUsed = 0;
-  let plBalance = 0;
-  
-  const dojDate = new Date(doj);
-  const sixMonthThreshold = new Date(dojDate);
-  sixMonthThreshold.setMonth(sixMonthThreshold.getMonth() + 6);
-  
-  if (currentDate < sixMonthThreshold) {
-      // Rule 1: < 6 months. Expire monthly.
-      plAllocated = 1; 
-      
-      const currentMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const currentMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      
-      plUsed = approvedLeaves
-          .filter(l => l.leaveType === 'PL')
-          .filter(l => {
-              const d = new Date(l.startDate);
-              return d >= currentMonthStart && d <= currentMonthEnd;
-          })
-           .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
-           
-       plBalance = (plAllocated - plUsed);
-   } else {
-      // Rule 2: > 6 months. Carry forward.
-      const monthsAfterThreshold = monthsBetweenRange(sixMonthThreshold, currentDate);
-      plAllocated = monthsAfterThreshold * 1.25;
-      
-      plUsed = approvedLeaves
-          .filter(l => l.leaveType === 'PL')
-          .filter(l => new Date(l.startDate) >= sixMonthThreshold)
-           .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
-       
-       plBalance = (plAllocated - plUsed);
-   }
-   
-   allocated.privilege = plAllocated;
-   
-   const balance = {
-     casual: (allocated.casual - usedCL),
-     sick: (allocated.sick - usedSL),
-     privilege: plBalance
-   };
-   const totalBalance = (balance.casual + balance.sick + balance.privilege);
-
-  return {
-    employeeId: emp.employeeId || '',
-    name: emp.name || emp.employeename || '',
-    position: emp.position || emp.role || '',
-    division: emp.division || '',
-    location: emp.location || emp.branch || '',
-    monthsOfService: mos,
-    traineeMonths,
-    regularMonths: postTraineeMonths,
-    balances: {
-      casual: { allocated: allocated.casual, used: usedCL, balance: balance.casual },
-      sick: { allocated: allocated.sick, used: usedSL, balance: balance.sick },
-      privilege: { 
-        allocated: allocated.privilege, 
-        used: plUsed, 
-        balance: balance.privilege,
-        nonCarryAllocated: 0,
-        carryAllocated: allocated.privilege,
-        carryForwardEligibleBalance: balance.privilege
-      },
-      totalBalance
-    }
-  };
 }
 
 // Leave balance for all employees or by employeeId
@@ -590,7 +474,7 @@ router.get('/balance', auth, async (req, res) => {
     } catch (_) {
       // If usage aggregation fails, continue
     }
-    
+
     const result = employees.map(emp => {
       // If persisted leaveBalances exist in separate collection, use them
       const stored = storedBalancesMap[emp.employeeId];
@@ -599,6 +483,10 @@ router.get('/balance', auth, async (req, res) => {
 
       const systemCalc = calcBalanceForEmployee(emp, usedMap[emp.employeeId] || []);
 
+      // Check if employee is in "No Carry Forward" period (Trainee or < 6 months)
+      // If so, we bypass stored balances to ensure monthly reset logic is strictly followed
+      const isNoCarryForward = (systemCalc.regularMonths || 0) < 6;
+
       if (stored && stored.balances && stored.balances.totalBalance !== undefined && storedYear === currentYear) {
         // Calculate what the system WOULD have allocated at the time of last update
         const lastUpdateDate = stored.lastUpdated ? new Date(stored.lastUpdated) : new Date(stored.createdAt);
@@ -606,41 +494,7 @@ router.get('/balance', auth, async (req, res) => {
         const pastSystemCalc = calcBalanceForEmployee(emp, [], lastUpdateDate);
 
         // Merge stored allocated with system used to ensure dynamic LOP detection
-        const mergedBalances = JSON.parse(JSON.stringify(stored.balances));
-        
-        ['casual', 'sick', 'privilege'].forEach(type => {
-            if (mergedBalances[type]) {
-                let allocated = Number(mergedBalances[type].allocated) || 0;
-                
-                // Calculate incremental accrual since last update
-                // This ensures that if a new month has started, the additional accrual is added
-                // even if the user has a manually saved balance.
-                const currentAlloc = Number(systemCalc.balances[type]?.allocated) || 0;
-                const pastAlloc = Number(pastSystemCalc.balances[type]?.allocated) || 0;
-                
-                // We add the difference between current system alloc and past system alloc
-                // This preserves any manual adjustments (stored.allocated) while adding new accruals
-                const delta = currentAlloc - pastAlloc;
-                
-                // Only apply delta if it's significant (avoid floating point noise)
-                if (Math.abs(delta) > 0.001) {
-                    allocated += delta;
-                }
-
-                // Use system calculated 'used' which is based on actual approved leaves
-                const used = Number(systemCalc.balances[type]?.used) || 0;
-                
-                mergedBalances[type].allocated = allocated;
-                mergedBalances[type].used = used;
-                mergedBalances[type].balance = allocated - used;
-            }
-        });
-        
-        // Recalculate total balance
-        const clBal = Number(mergedBalances.casual?.balance) || 0;
-        const slBal = Number(mergedBalances.sick?.balance) || 0;
-        const plBal = Number(mergedBalances.privilege?.balance) || 0;
-        mergedBalances.totalBalance = clBal + slBal + plBal;
+        const mergedBalances = mergeBalances(stored.balances, systemCalc, pastSystemCalc);
 
         return {
           employeeId: emp.employeeId || '',
@@ -675,13 +529,13 @@ router.put('/balance/save', auth, async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
     const approvals = await LeaveApplication.find({ employeeId, status: 'Approved' }).lean();
-    
+
     let finalBalances;
 
     if (manualBalances) {
       // If manual balances provided, use them but respect used counts from system
       const systemCalc = calcBalanceForEmployee(emp, approvals);
-      
+
       const makeBalanceObj = (type, manualVal) => {
         const used = systemCalc.balances[type]?.used || 0;
         const bal = Number(manualVal) || 0;
@@ -701,7 +555,7 @@ router.put('/balance/save', auth, async (req, res) => {
           carryAllocated: systemCalc.balances.privilege.carryAllocated,
           carryForwardEligibleBalance: Number(manualBalances.privilege) || 0
         },
-        totalBalance: (Number(manualBalances.casual)||0) + (Number(manualBalances.sick)||0) + (Number(manualBalances.privilege)||0)
+        totalBalance: (Number(manualBalances.casual) || 0) + (Number(manualBalances.sick) || 0) + (Number(manualBalances.privilege) || 0)
       };
     } else {
       // Default: System calculation
@@ -710,7 +564,7 @@ router.put('/balance/save', auth, async (req, res) => {
 
     const updated = await LeaveBalance.findOneAndUpdate(
       { employeeId },
-      { 
+      {
         employeeId,
         employeeName: emp.name,
         balances: finalBalances,
@@ -734,11 +588,11 @@ router.post('/balance/sync-all', auth, async (req, res) => {
 
     const employees = await Employee.find({}).lean();
     const empIds = employees.map(e => e.employeeId).filter(Boolean);
-    
+
     // Get all approvals
-    const approvals = await LeaveApplication.find({ 
-      employeeId: { $in: empIds }, 
-      status: 'Approved' 
+    const approvals = await LeaveApplication.find({
+      employeeId: { $in: empIds },
+      status: 'Approved'
     }).lean();
 
     const usedMap = {};
@@ -753,10 +607,10 @@ router.post('/balance/sync-all', auth, async (req, res) => {
 
     for (const emp of employees) {
       if (!emp.employeeId) continue;
-      
+
       const usedLeaves = usedMap[emp.employeeId] || [];
       const calc = calcBalanceForEmployee(emp, usedLeaves);
-      
+
       // We want to preserve existing balances if they have manual adjustments, 
       // OR we just overwrite everything with the system calculation?
       // "Save all employee automatically" usually means "Calculate and Persist".
@@ -768,24 +622,23 @@ router.post('/balance/sync-all', auth, async (req, res) => {
       // but simpler is just to save the current calculated state.
       // Given the previous "Save" logic which respects system used count but allows manual allocated,
       // a bulk sync usually implies "Run calculation for everyone and save it".
-      
+
       // Let's just save the system calculation for now. 
       // If a user manually edited a balance, it's already in the DB.
       // If we re-run this, we might overwrite their manual edit if we don't fetch the existing one.
-      
+
       // OPTION: Fetch existing balance first.
       const existing = await LeaveBalance.findOne({ employeeId: emp.employeeId }).lean();
-      
+
       let finalBalances;
-      if (existing && existing.balances) {
-         // If existing, we might want to keep the "allocated" values if they differ from system?
-         // But maybe the user WANTS to refresh everything based on new logic/months of service.
-         // Let's stick to: "Update with latest system calculation based on current service/approvals".
-         // This resets manual edits if the system logic produces different results. 
-         // But usually "Auto Save" implies "Make sure DB matches the rules".
-         finalBalances = calc.balances;
+      if (existing && existing.balances && existing.balances.totalBalance !== undefined) {
+        // Smart Sync: Preserve manual adjustments by calculating delta
+        const lastUpdateDate = existing.lastUpdated ? new Date(existing.lastUpdated) : new Date(existing.createdAt);
+        const pastSystemCalc = calcBalanceForEmployee(emp, [], lastUpdateDate);
+
+        finalBalances = mergeBalances(existing.balances, calc, pastSystemCalc);
       } else {
-         finalBalances = calc.balances;
+        finalBalances = calc.balances;
       }
 
       updates.push({
@@ -838,20 +691,20 @@ router.get('/my-balance', auth, async (req, res) => {
     // Aggregate approved leaves for this user
     let approvals = [];
     if (emp.employeeId) {
-        approvals = await LeaveApplication.find({ 
-            $or: [{ userId: user._id }, { employeeId: emp.employeeId }],
-            status: 'Approved' 
-        }).lean();
-        // Deduplicate
-        const seen = new Set();
-        approvals = approvals.filter(a => {
-            const k = a._id.toString();
-            if(seen.has(k)) return false;
-            seen.add(k);
-            return true;
-        });
+      approvals = await LeaveApplication.find({
+        $or: [{ userId: user._id }, { employeeId: emp.employeeId }],
+        status: 'Approved'
+      }).lean();
+      // Deduplicate
+      const seen = new Set();
+      approvals = approvals.filter(a => {
+        const k = a._id.toString();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
     } else {
-        approvals = await LeaveApplication.find({ userId: user._id, status: 'Approved' }).lean();
+      approvals = await LeaveApplication.find({ userId: user._id, status: 'Approved' }).lean();
     }
 
     const systemCalc = calcBalanceForEmployee(emp, approvals);
@@ -863,37 +716,37 @@ router.get('/my-balance', auth, async (req, res) => {
       const storedYear = stored ? (stored.year || new Date(stored.updatedAt || stored.createdAt).getFullYear()) : 0;
 
       if (stored && stored.balances && stored.balances.totalBalance !== undefined && storedYear === currentYear) {
-         // Calculate what the system WOULD have allocated at the time of last update
-         const lastUpdateDate = stored.lastUpdated ? new Date(stored.lastUpdated) : new Date(stored.createdAt);
-         const pastSystemCalc = calcBalanceForEmployee(emp, [], lastUpdateDate);
+        // Calculate what the system WOULD have allocated at the time of last update
+        const lastUpdateDate = stored.lastUpdated ? new Date(stored.lastUpdated) : new Date(stored.createdAt);
+        const pastSystemCalc = calcBalanceForEmployee(emp, [], lastUpdateDate);
 
-         // Merge stored allocated with system used
-         const mergedBalances = JSON.parse(JSON.stringify(stored.balances));
-         
-         ['casual', 'sick', 'privilege'].forEach(type => {
-             if (mergedBalances[type]) {
-                 let allocated = Number(mergedBalances[type].allocated) || 0;
-                 
-                 // Calculate incremental accrual
-                 const currentAlloc = Number(systemCalc.balances[type]?.allocated) || 0;
-                 const pastAlloc = Number(pastSystemCalc.balances[type]?.allocated) || 0;
-                 const delta = currentAlloc - pastAlloc;
-                 
-                 if (Math.abs(delta) > 0.001) {
-                     allocated += delta;
-                 }
+        // Merge stored allocated with system used
+        const mergedBalances = JSON.parse(JSON.stringify(stored.balances));
 
-                 const used = Number(systemCalc.balances[type]?.used) || 0;
-                 mergedBalances[type].allocated = allocated;
-                 mergedBalances[type].used = used;
-                 mergedBalances[type].balance = allocated - used;
-             }
-         });
-         
-         const clBal = Number(mergedBalances.casual?.balance) || 0;
-         const slBal = Number(mergedBalances.sick?.balance) || 0;
-         const plBal = Number(mergedBalances.privilege?.balance) || 0;
-         mergedBalances.totalBalance = clBal + slBal + plBal;
+        ['casual', 'sick', 'privilege'].forEach(type => {
+          if (mergedBalances[type]) {
+            let allocated = Number(mergedBalances[type].allocated) || 0;
+
+            // Calculate incremental accrual
+            const currentAlloc = Number(systemCalc.balances[type]?.allocated) || 0;
+            const pastAlloc = Number(pastSystemCalc.balances[type]?.allocated) || 0;
+            const delta = currentAlloc - pastAlloc;
+
+            if (Math.abs(delta) > 0.001) {
+              allocated += delta;
+            }
+
+            const used = Number(systemCalc.balances[type]?.used) || 0;
+            mergedBalances[type].allocated = allocated;
+            mergedBalances[type].used = used;
+            mergedBalances[type].balance = allocated - used;
+          }
+        });
+
+        const clBal = Number(mergedBalances.casual?.balance) || 0;
+        const slBal = Number(mergedBalances.sick?.balance) || 0;
+        const plBal = Number(mergedBalances.privilege?.balance) || 0;
+        mergedBalances.totalBalance = clBal + slBal + plBal;
 
         return res.json({
           employeeId: emp.employeeId || '',
@@ -923,36 +776,31 @@ router.get('/', auth, async (req, res) => {
     if (employeeId) filter.employeeId = employeeId;
     if (status && status !== 'all') filter.status = status;
     if (leaveType && leaveType !== 'all') filter.leaveType = leaveType;
-    
-    // PROJECT MANAGER FILTERING
-    if (req.user.role === 'projectmanager') {
-      const pmEmp = await Employee.findOne({ employeeId: req.user.employeeId });
-      if (!pmEmp) {
-        // If Project Manager has no linked employee record, they shouldn't see any data
-        return res.json([]);
-      }
-      
-      // Find all employees in same division and location
-      const division = pmEmp.division;
-      const location = pmEmp.location;
-      
-      // Find employees with matching division and location
-      // Note: We use case-insensitive matching just in case
-      const empFilter = {};
-      if (division) empFilter.division = division;
-      if (location) empFilter.location = location;
-      
-      const authorizedEmployees = await Employee.find(empFilter).select('employeeId');
-      const authorizedEmpIds = authorizedEmployees.map(e => e.employeeId).filter(Boolean);
-      
-      // Restrict query to these employee IDs
-      if (filter.employeeId) {
-          // If specific employee requested, verify they are in the list
-          if (!authorizedEmpIds.includes(filter.employeeId)) {
-              return res.json([]); // Not authorized to view this employee
+
+    const role = String(req.user.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+    const isPM = role === 'projectmanager' || role === 'project_manager';
+    if (!isAdmin) {
+      const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user.employeeId);
+      if (isPM) {
+        if (filter.employeeId) {
+          if (!myAssignedMemberIds.includes(filter.employeeId)) {
+            return res.json([]);
           }
+        } else {
+          if (myAssignedMemberIds.length === 0) {
+            return res.json([]);
+          }
+          filter.employeeId = { $in: myAssignedMemberIds };
+        }
       } else {
-          filter.employeeId = { $in: authorizedEmpIds };
+        if (filter.employeeId) {
+          if (allAssignedMemberIds.includes(filter.employeeId)) {
+            return res.json([]);
+          }
+        } else if (allAssignedMemberIds.length > 0) {
+          filter.employeeId = { $nin: allAssignedMemberIds };
+        }
       }
     }
 
@@ -970,7 +818,7 @@ router.get('/', auth, async (req, res) => {
       if (endDate) filter.startDate.$lte = new Date(endDate);
     }
     const items = await LeaveApplication.find(filter).sort({ createdAt: -1 }).lean();
-    
+
     // Get user details to fallback for missing employeeId/Name
     const userIds = Array.from(new Set(items.map(i => i.userId).filter(Boolean)));
     let userMap = {};
@@ -985,7 +833,7 @@ router.get('/', auth, async (req, res) => {
     // Collect all potential employee IDs and Emails
     const empIds = new Set();
     const userEmails = new Set();
-    
+
     items.forEach(i => {
       if (i.employeeId) empIds.add(i.employeeId);
       const user = userMap[i.userId?.toString()];
@@ -1012,10 +860,10 @@ router.get('/', auth, async (req, res) => {
 
     const mapped = items.map(i => {
       const user = userMap[i.userId?.toString()] || {};
-      
+
       // Try to resolve employee from multiple sources
       let emp = null;
-      
+
       // 1. Direct Employee ID
       if (i.employeeId && empMap[i.employeeId]) {
         emp = empMap[i.employeeId];
@@ -1031,7 +879,7 @@ router.get('/', auth, async (req, res) => {
 
       // Determine final values
       const effectiveEmployeeId = emp?.employeeId || i.employeeId || user.employeeId || '';
-      
+
       return {
         ...i,
         employeeId: effectiveEmployeeId,
@@ -1058,14 +906,56 @@ router.put('/:id/status', auth, async (req, res) => {
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
+
+    const existing = await LeaveApplication.findById(req.params.id).select('employeeId userId').lean();
+    if (!existing) return res.status(404).json({ error: 'Leave application not found' });
+
+    let targetEmployeeId = String(existing.employeeId || '');
+    if (!targetEmployeeId && existing.userId) {
+      const u = await User.findById(existing.userId).select('employeeId').lean();
+      targetEmployeeId = String(u?.employeeId || '');
+    }
+
+    const role = String(req.user.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+    const isPM = role === 'projectmanager' || role === 'project_manager';
+    if (!isAdmin && targetEmployeeId) {
+      const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user.employeeId);
+      if (isPM) {
+        if (!myAssignedMemberIds.includes(targetEmployeeId)) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      } else {
+        if (allAssignedMemberIds.includes(targetEmployeeId)) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
+
     const updated = await LeaveApplication.findByIdAndUpdate(
       req.params.id,
       { status, ...(status === 'Rejected' ? { rejectionReason: rejectionReason || '' } : { rejectionReason: '' }) },
       { new: true }
     );
     if (updated) {
-       await syncTimesheetWithLeave(updated);
-       // try { await sendLeaveStatusEmail(updated); } catch (_) {}
+      await syncTimesheetWithLeave(updated);
+      // try { await sendLeaveStatusEmail(updated); } catch (_) {}
+
+      // Create Notification
+      try {
+        const notifType = status === 'Approved' ? 'LEAVE_APPROVED' : status === 'Rejected' ? 'LEAVE_REJECTED' : 'OTHER';
+        if (notifType !== 'OTHER') {
+          await Notification.create({
+            recipient: existing.userId,
+            title: status === 'Approved' ? 'Leave Approved' : 'Leave Rejected',
+            message: `Your leave request from ${new Date(updated.startDate).toLocaleDateString()} to ${new Date(updated.endDate).toLocaleDateString()} has been ${status.toLowerCase()}.`,
+            type: notifType,
+            isRead: false
+          });
+        }
+      } catch (err) {
+        console.error('Error creating notification:', err);
+      }
     }
     if (!updated) return res.status(404).json({ error: 'Leave application not found' });
     res.json(updated);
@@ -1078,19 +968,19 @@ router.put('/:id/status', auth, async (req, res) => {
 router.get('/locked-days', auth, async (req, res) => {
   try {
     const { weekStart, weekEnd } = req.query;
-    
+
     if (!weekStart || !weekEnd) {
-      return res.status(400).json({ 
-        error: 'weekStart and weekEnd parameters are required' 
+      return res.status(400).json({
+        error: 'weekStart and weekEnd parameters are required'
       });
     }
-    
+
     const lockedDays = await getLockedDaysForUser(
       req.user._id,
       new Date(weekStart),
       new Date(weekEnd)
     );
-    
+
     res.json({ lockedDays });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1115,7 +1005,7 @@ router.post('/', auth, async (req, res) => {
     // Fetch employee details to populate name and location
     let employeeName = req.user.name || '';
     let location = '';
-    
+
     // Try to find employee record
     let emp = null;
     if (req.user.employeeId) {
@@ -1146,6 +1036,36 @@ router.post('/', auth, async (req, res) => {
     // try {
     //   await sendLeaveSubmissionEmail(created, req.user, emp || {});
     // } catch (_) {}
+
+    // Create Notification
+    try {
+      // 1. Notify Applicant (Employee)
+      await Notification.create({
+        recipient: req.user._id,
+        title: 'Leave Applied',
+        message: `Your leave application for ${leaveType} from ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()} has been submitted.`,
+        type: 'LEAVE_APPLY',
+        isRead: false
+      });
+
+      // 2. Notify Admins and Reporting Managers
+      const recipients = await getAdminAndPMUserIds(emp);
+      for (const recipientId of recipients) {
+        // Avoid sending duplicate if admin is also the applicant
+        if (recipientId === req.user._id.toString()) continue;
+
+        await Notification.create({
+          recipient: recipientId,
+          title: 'New Leave Request',
+          message: `${employeeName} applied for ${leaveType} (${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}).`,
+          type: 'LEAVE_APPLY',
+          isRead: false
+        });
+      }
+    } catch (err) {
+      console.error('Error creating notification:', err);
+    }
+
     res.status(201).json(created);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1191,9 +1111,28 @@ router.get('/email-action', async (req, res) => {
     }
     const updated = await LeaveApplication.findByIdAndUpdate(leaveId, { status: action, rejectionReason: action === 'Rejected' ? '' : leave.rejectionReason }, { new: true });
     if (updated && action === 'Approved') {
-      try { await syncTimesheetWithLeave(updated); } catch (_) {}
+      try { await syncTimesheetWithLeave(updated); } catch (_) { }
     }
     // try { if (updated) await sendLeaveStatusEmail(updated); } catch (_) {}
+
+    // Create Notification
+    try {
+      if (updated) {
+        const notifType = action === 'Approved' ? 'LEAVE_APPROVED' : action === 'Rejected' ? 'LEAVE_REJECTED' : 'OTHER';
+        if (notifType !== 'OTHER') {
+          await Notification.create({
+            recipient: updated.userId,
+            title: action === 'Approved' ? 'Leave Approved' : 'Leave Rejected',
+            message: `Your leave request from ${new Date(updated.startDate).toLocaleDateString()} to ${new Date(updated.endDate).toLocaleDateString()} has been ${action.toLowerCase()}.`,
+            type: notifType,
+            isRead: false
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error creating notification:', err);
+    }
+
     const msg = action === 'Approved' ? 'Leave approved successfully.' : 'Leave rejected successfully.';
     return res.send(`<div style="font-family:Arial;padding:20px;"><h3>${msg}</h3><p>Employee: ${updated.employeeName}</p><p>Type: ${updated.leaveType}</p><p>Days: ${updated.totalDays}</p></div>`);
   } catch (err) {

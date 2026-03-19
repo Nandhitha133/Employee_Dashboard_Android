@@ -47,6 +47,27 @@ const internshipSchema = new mongoose.Schema({
     enum: ['Completed', 'Ongoing', 'Terminated'],
     default: 'Completed'
   },
+  stipendAmount: {
+    type: Number,
+    default: null,
+    min: 0
+  },
+  workLocation: {
+    type: String,
+    trim: true,
+    default: 'Chennai'
+  },
+  division: {
+    type: String,
+    enum: ['SDS', 'TEKLA', 'DAS (Software)'],
+    default: 'SDS'
+  },
+  internId: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true
+  },
   contactEmail: {
     type: String,
     trim: true,
@@ -105,6 +126,9 @@ internshipSchema.index({ internshipType: 1 });
 internshipSchema.index({ status: 1 });
 internshipSchema.index({ mentor: 1 });
 internshipSchema.index({ createdAt: -1 });
+internshipSchema.index({ division: 1 });
+internshipSchema.index({ workLocation: 1 });
+internshipSchema.index({ internId: 1 }, { unique: true, sparse: true });
 
 // Virtual for duration in months
 internshipSchema.virtual('durationMonths').get(function() {
@@ -244,6 +268,12 @@ internshipSchema.statics.searchInterns = async function(searchTerm, filters = {}
     
     if (filters.status && filters.status !== 'all') {
       query.status = filters.status;
+    }
+    if (filters.division && filters.division !== 'all') {
+      query.division = filters.division;
+    }
+    if (filters.workLocation && filters.workLocation !== 'all') {
+      query.workLocation = filters.workLocation;
     }
     
     if (filters.collegeName && filters.collegeName !== 'all') {

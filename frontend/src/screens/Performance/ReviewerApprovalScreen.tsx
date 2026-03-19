@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Picker } from '@react-native-picker/picker';
+const PickerItem = Picker.Item as any;
 import { performanceAPI } from '../../services/api';
 import CommonHeader from '../../components/CommonHeader';
 import CommonFooter from '../../components/CommonFooter';
@@ -312,7 +313,7 @@ const ReviewerApprovalScreen = () => {
                     dropdownIconColor={COLORS.primary}
                   >
                     {financialYears.map(year => (
-                      <Picker.Item key={year} label={year} value={year} color={COLORS.dropdownText} />
+                      <PickerItem key={year} label={year} value={year} color={COLORS.dropdownText} />
                     ))}
                   </Picker>
                 </View>

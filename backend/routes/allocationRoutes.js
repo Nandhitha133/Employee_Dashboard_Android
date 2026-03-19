@@ -6,9 +6,18 @@ const Employee = require("../models/Employee");
 // CREATE ALLOCATION
 router.post("/", async (req, res) => {
   try {
-    const { projectName, employeeName, employeeCode } = req.body;
+    const { projectId, projectCode, projectName, employeeName, employeeCode } = req.body;
 
-    const project = await Project.findOne({ name: projectName });
+    let project = null;
+    if (projectId) {
+      project = await Project.findById(projectId);
+    }
+    if (!project && projectCode) {
+      project = await Project.findOne({ code: projectCode });
+    }
+    if (!project && projectName) {
+      project = await Project.findOne({ name: projectName });
+    }
     // Prefer matching by employeeCode (unique) when provided; fallback to name
     let employee = null;
     if (employeeCode) {
@@ -31,6 +40,7 @@ router.post("/", async (req, res) => {
     }
 
     req.body.projectId = project._id;
+    req.body.projectName = project.name;
     req.body.projectCode = project.code;
     req.body.projectDivision = project.division;
 
@@ -68,10 +78,18 @@ router.delete("/:id", async (req, res) => {
 // UPDATE ALLOCATION
 router.put("/:id", async (req, res) => {
   try {
-    const { projectName, employeeName, employeeCode } = req.body;
+    const { projectId, projectCode, projectName, employeeName, employeeCode } = req.body;
 
-    // Find project by name
-    const project = await Project.findOne({ name: projectName });
+    let project = null;
+    if (projectId) {
+      project = await Project.findById(projectId);
+    }
+    if (!project && projectCode) {
+      project = await Project.findOne({ code: projectCode });
+    }
+    if (!project && projectName) {
+      project = await Project.findOne({ name: projectName });
+    }
     if (!project) return res.status(400).json({ error: "Project not found" });
 
     // Find employee by name
@@ -105,6 +123,7 @@ router.put("/:id", async (req, res) => {
     const updateData = {
       ...req.body,
       projectId: project._id,
+      projectName: project.name,
       projectCode: project.code,
       projectDivision: project.division,
       employeeId: employee._id,

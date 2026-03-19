@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Team = require('../models/Team');
 const Employee = require('../models/Employee');
+const User = require('../models/User');
 
 router.get('/leaders', auth, async (req, res) => {
   try {
@@ -10,13 +11,36 @@ router.get('/leaders', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     const type = String(req.query.type || 'team').toLowerCase();
-    const pattern = type === 'project' ? /sr\.?\s*project\s*manager/i : /sr\.?\s*team/i;
-    const leaders = await Employee.find({ 
-      $or: [
-        { designation: { $regex: pattern } },
-        { position: { $regex: pattern } }
-      ]
-    }, {
+    
+    let query = {};
+    
+    if (type === 'project') {
+      const users = await User.find({ 
+        role: { $in: ['admin', 'projectmanager'] } 
+      }).select('employeeId');
+      
+      const userEmployeeIds = users.map(u => u.employeeId).filter(Boolean);
+      
+      const pattern = /sr\.?\s*project\s*manager/i;
+      
+      query = {
+        $or: [
+          { designation: { $regex: pattern } },
+          { position: { $regex: pattern } },
+          { employeeId: { $in: userEmployeeIds } }
+        ]
+      };
+    } else {
+      const pattern = /sr\.?\s*team/i;
+      query = {
+        $or: [
+          { designation: { $regex: pattern } },
+          { position: { $regex: pattern } }
+        ]
+      };
+    }
+
+    const leaders = await Employee.find(query, {
       name: 1,
       employeeId: 1,
       division: 1,
@@ -24,6 +48,7 @@ router.get('/leaders', auth, async (req, res) => {
       position: 1,
       _id: 1
     }).sort({ name: 1 });
+    
     res.json(leaders);
   } catch (err) {
     res.status(500).json({ message: err.message });

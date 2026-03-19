@@ -25,7 +25,8 @@ const app = express();
 
 // --------------------- MIDDLEWARE --------------------- //
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const upload = multer(); // optional for file uploads
 
@@ -60,12 +61,14 @@ app.use("/api/leave", require("./routes/leaveRoutes"));
 
 app.use("/api/mail", require("./routes/mail.routes"));
 
-//payroll
-
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/compensation", require("./routes/compensationRoutes"));
 app.use("/api/monthly-payroll", monthlyPayrollRoutes);
 app.use("/api/loans", loanRoutes);
+app.use("/api/holiday-allowances", require("./routes/holidayAllowanceRoutes"));
+app.use("/api/insurance", require("./routes/insurance"));
+app.use("/api/insurance-claims", require("./routes/insuranceClaims"));
+app.use("/api/marriage-allowances", require("./routes/marriageAllowanceRoutes"));
 
 
 // Announcements Routes
@@ -76,6 +79,9 @@ app.use("/api/expenditure", require("./routes/expenditureRoutes"));
 
 // Internship Routes
 app.use("/api/interns", require("./routes/internship"));
+
+// Resume Repository Routes
+app.use("/api/resumes", require("./routes/resume"));
 
 // Exit Formalities Routes
 app.use("/api/exit-formalities", require("./routes/exitFormalities"));
@@ -89,6 +95,14 @@ app.use("/api/performance/team-appraisals", require("./routes/teamAppraisalRoute
 app.use("/api/performance/reviewer", require("./routes/reviewerRoutes"));
 app.use("/api/performance/director", require("./routes/directorRoutes"));
 app.use("/api/performance/increment-master", require("./routes/incrementRoutes"));
+app.use("/api/performance/increment-summary", require("./routes/incrementSummaryRoutes"));
+app.use("/api/performance/attributes", require("./routes/appraisalAttributeRoutes"));
+
+app.use("/api/notifications", require("./routes/notificationRoutes"));
+
+app.use("/api/special-permissions", require("./routes/specialPermissions"));
+app.use("/api/celebrations", require("./routes/celebrationRoutes"));
+
 
 // Base Route
 app.get("/", (req, res) => {
@@ -169,55 +183,56 @@ app.post("/api/hikvision/attendance", async (req, res) => {
       if (data && data.data && data.data.record) {
         const records = data.data.record;
         console.log(`Processing ${records.length} records for auto-save...`);
-        
+
         let savedCount = 0;
 
         for (const item of records) {
           const personInfo = item.personInfo || {};
           const attendanceInfo = item.attendanceBaseInfo || {};
-          
+
           if (!personInfo.personCode) continue;
 
           // 1. Process Check-IN
           if (attendanceInfo.beginTime) {
-             const checkInTime = new Date(attendanceInfo.beginTime);
-             await Attendance.findOneAndUpdate(
-               {
-                 employeeId: personInfo.personCode,
-                 punchTime: checkInTime
-               },
-               {
-                 $set: {
-                   name: personInfo.name || "Unknown",
-                   direction: "in",
-                   source: "hikvision_sync",
-                   correspondingInTime: null
-                 }
-               },
-               { upsert: true, new: true }
-             );
-             savedCount++;
+            const checkInTime = new Date(attendanceInfo.beginTime);
+            await Attendance.findOneAndUpdate(
+              {
+                employeeId: personInfo.personCode,
+                punchTime: checkInTime
+              },
+              {
+                $set: {
+                  name: personInfo.name || "Unknown",
+                  direction: "in",
+                  source: "hikvision_sync",
+                  correspondingInTime: null
+                }
+              },
+              { upsert: true, new: true }
+            );
+            savedCount++;
           }
 
           // 2. Process Check-OUT
           if (attendanceInfo.endTime) {
-             const checkOutTime = new Date(attendanceInfo.endTime);
-             await Attendance.findOneAndUpdate(
-               {
-                 employeeId: personInfo.personCode,
-                 punchTime: checkOutTime
-               },
-               {
-                 $set: {
-                   name: personInfo.name || "Unknown",
-                   direction: "out",
-                   source: "hikvision_sync",
-                   correspondingInTime: null
-                 }
-               },
-               { upsert: true, new: true }
-             );
-             savedCount++;
+            const checkOutTime = new Date(attendanceInfo.endTime);
+            await Attendance.findOneAndUpdate(
+              {
+                employeeId: personInfo.personCode,
+                punchTime: checkOutTime
+              },
+              {
+                $set: {
+                  name: personInfo.name || "Unknown",
+                  direction: "out",
+                  source: "hikvision_sync",
+                  correspondingInTime: null,
+                  workDurationSeconds: item.allDurationTime
+                }
+              },
+              { upsert: true, new: true }
+            );
+            savedCount++;
           }
         }
         console.log(`✅ Auto-saved/Rewrote ${savedCount} punch records to DB.`);
@@ -235,9 +250,6 @@ app.post("/api/hikvision/attendance", async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-// app.js or server.js
-const holidayAllowanceRoutes = require('./routes/holidayAllowance');
-app.use('/api/holiday-allowance', holidayAllowanceRoutes);
 
 // --------------------- ERROR HANDLER --------------------- //
 app.use((err, req, res, next) => {
@@ -247,7 +259,10 @@ app.use((err, req, res, next) => {
 
 // --------------------- CRON JOBS --------------------- //
 const setupTimesheetReminder = require("./cron/timesheetReminder");
+const setupLeaveBalanceSync = require("./cron/leaveBalanceSync");
+
 setupTimesheetReminder();
+setupLeaveBalanceSync();
 
 // --------------------- START SERVER --------------------- //
 const PORT = process.env.PORT || 5003;

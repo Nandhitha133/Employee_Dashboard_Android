@@ -3,6 +3,14 @@ const router = express.Router();
 const Internship = require('../models/Internship');
 const auth = require('../middleware/auth');
 
+function divisionCode(div) {
+  if (!div) return 'SDS';
+  const d = String(div).toLowerCase();
+  if (d.includes('das')) return 'DAS';
+  if (d.includes('tekla')) return 'TEKLA';
+  return 'SDS';
+}
+
 // @desc    Get all interns
 // @route   GET /api/interns
 router.get('/', auth, async (req, res) => {
@@ -89,6 +97,22 @@ router.post('/', auth, async (req, res) => {
     }
     if (req.body.endDate) {
       req.body.endDate = new Date(req.body.endDate);
+    }
+    
+    // Auto-generate internId if missing, format: <DIV>INT### (e.g., DASINT001)
+    if (!req.body.internId) {
+      const code = divisionCode(req.body.division);
+      const prefix = `${code}INT`;
+      // Find latest matching internId
+      const latest = await Internship.findOne({ internId: { $regex: `^${prefix}\\d+$` } })
+        .sort({ internId: -1 })
+        .lean();
+      let nextNum = 1;
+      if (latest && latest.internId) {
+        const m = latest.internId.match(/(\d+)$/);
+        if (m) nextNum = parseInt(m[1], 10) + 1;
+      }
+      req.body.internId = `${prefix}${String(nextNum).padStart(3, '0')}`;
     }
     
     const intern = await Internship.create(req.body);

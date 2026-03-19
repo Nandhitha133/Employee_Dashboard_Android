@@ -22,8 +22,7 @@ async function createAdminUser() {
       password: 'admin123'
     });
     
-    const token = loginResponse.data.token;
-    console.log('Login successful, token received');
+    
     
     // Now trigger the attendance sync with the token
     console.log('Triggering Hikvision attendance sync...');

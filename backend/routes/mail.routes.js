@@ -9,6 +9,16 @@ router.post("/send", async (req, res) => {
   try {
     const { email, cc, subject, message, html, attachments } = req.body;
 
+    console.log("📨 Email Request Received:");
+    console.log(`- To: ${email}`);
+    console.log(`- Subject: ${subject}`);
+    console.log(`- Attachments: ${attachments ? attachments.length : 0}`);
+    if (attachments && attachments.length > 0) {
+      attachments.forEach((att, idx) => {
+        console.log(`  [${idx}] Filename: ${att.filename}, Encoding: ${att.encoding}, Content Length: ${att.content ? att.content.length : 0}`);
+      });
+    }
+
     await sendZohoMail({
       to: email,
       cc,
@@ -23,10 +33,11 @@ router.post("/send", async (req, res) => {
       message: "Email sent successfully",
     });
   } catch (err) {
-    console.error("Zoho Mail Error:", err.response?.data || err.message);
+    console.error("Mail Send Error:", err); // Improved logging
     res.status(500).json({
       success: false,
-      message: "Failed to send email",
+      message: "Failed to send email: " + (err.message || "Unknown error"),
+      error: err.toString()
     });
   }
 });

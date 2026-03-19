@@ -10,9 +10,13 @@ const RatingSchema = new mongoose.Schema({
 }, { _id: false });
 
 const IncrementMatrixSchema = new mongoose.Schema({
-  id: { type: Number, required: true, unique: true }, // Keeping ID for frontend compatibility
+  id: { type: Number, required: true }, // Removed unique: true from field level
+  financialYear: { type: String, required: true, default: '2024-2025' },
   category: { type: String, required: true },
   ratings: [RatingSchema]
 }, { timestamps: true });
+
+// Compound unique index
+IncrementMatrixSchema.index({ id: 1, financialYear: 1 }, { unique: true });
 
 module.exports = mongoose.model('IncrementMatrix', IncrementMatrixSchema);

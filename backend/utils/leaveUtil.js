@@ -49,29 +49,75 @@ function calcBalanceForEmployee(emp, approvedLeaves = []) {
     const isTrainee = designation.includes('trainee');
 
     let casualAlloc = 0, sickAlloc = 0, privilegeAlloc = 0;
+    let casualUsed = 0, sickUsed = 0, privilegeUsed = 0;
+
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
     if (isTrainee) {
-        const traineeMonths = Math.min(monthsOfService, 12);
-        privilegeAlloc = traineeMonths * 1;
+        // Trainee: 1 PL, No Carry Forward
+        privilegeAlloc = 1;
         casualAlloc = 0;
         sickAlloc = 0;
-    } else {
-        const firstSix = Math.min(monthsOfService, 6);
-        const afterSix = Math.max(monthsOfService - 6, 0);
-        privilegeAlloc = (firstSix * 1) + (afterSix * 1.25);
-        casualAlloc = afterSix * 0.5;
-        sickAlloc = afterSix * 0.5;
-    }
 
-    // Calculate used leaves
-    let casualUsed = 0, sickUsed = 0, privilegeUsed = 0;
-    approvedLeaves.forEach(l => {
-        const type = (l.leaveType || '').toLowerCase();
-        const days = Number(l.totalDays || 0);
-        if (type.includes('casual')) casualUsed += days;
-        else if (type.includes('sick')) sickUsed += days;
-        else if (type.includes('privilege') || type === 'pl') privilegeUsed += days;
-    });
+        privilegeUsed = approvedLeaves
+            .filter(l => {
+                const type = (l.leaveType || '').toLowerCase();
+                return type.includes('privilege') || type === 'pl';
+            })
+            .filter(l => {
+                const d = new Date(l.startDate || l.date);
+                return d >= currentMonthStart && d <= currentMonthEnd;
+            })
+            .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
+
+    } else {
+        if (monthsOfService < 6) {
+            // First 6 months: 1 PL, No Carry Forward
+            privilegeAlloc = 1;
+            casualAlloc = 0;
+            sickAlloc = 0;
+
+            privilegeUsed = approvedLeaves
+                .filter(l => {
+                    const type = (l.leaveType || '').toLowerCase();
+                    return type.includes('privilege') || type === 'pl';
+                })
+                .filter(l => {
+                    const d = new Date(l.startDate || l.date);
+                    return d >= currentMonthStart && d <= currentMonthEnd;
+                })
+                .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
+        } else {
+            // After 6 months: Carry Forward Allowed
+            // Allocation starts from 6th month onwards
+            const afterSix = Math.max(0, monthsOfService - 6);
+            privilegeAlloc = afterSix * 1.25;
+            casualAlloc = afterSix * 0.5;
+            sickAlloc = afterSix * 0.5;
+
+            const threshold = new Date(joinDate);
+            threshold.setMonth(threshold.getMonth() + 6);
+
+            privilegeUsed = approvedLeaves
+                .filter(l => {
+                    const type = (l.leaveType || '').toLowerCase();
+                    return type.includes('privilege') || type === 'pl';
+                })
+                .filter(l => new Date(l.startDate || l.date) >= threshold)
+                .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
+
+            casualUsed = approvedLeaves
+                .filter(l => (l.leaveType || '').toLowerCase().includes('casual'))
+                .filter(l => new Date(l.startDate || l.date) >= threshold)
+                .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
+
+            sickUsed = approvedLeaves
+                .filter(l => (l.leaveType || '').toLowerCase().includes('sick'))
+                .filter(l => new Date(l.startDate || l.date) >= threshold)
+                .reduce((sum, l) => sum + (Number(l.totalDays) || 0), 0);
+        }
+    }
 
     const round = (n) => Math.round(n * 10) / 10;
 
@@ -83,6 +129,9 @@ function calcBalanceForEmployee(emp, approvedLeaves = []) {
             casual: { allocated: round(casualAlloc), used: round(casualUsed), balance: round(casualAlloc - casualUsed) },
             sick: { allocated: round(sickAlloc), used: round(sickUsed), balance: round(sickAlloc - sickUsed) },
             privilege: { allocated: round(privilegeAlloc), used: round(privilegeUsed), balance: round(privilegeAlloc - privilegeUsed) },
+            isMonthlyExpiry: isTrainee || monthsOfService < 6,
+            totalAllocated: round(casualAlloc + sickAlloc + privilegeAlloc),
+            totalUsed: round(casualUsed + sickUsed + privilegeUsed),
             totalBalance: round((casualAlloc + sickAlloc + privilegeAlloc) - (casualUsed + sickUsed + privilegeUsed))
         }
     };

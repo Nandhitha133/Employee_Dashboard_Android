@@ -96,7 +96,7 @@ const employeeSchema = new mongoose.Schema({
   director: String,
   status: {
     type: String,
-    enum: ['Active', 'Inactive', 'Suspended'],
+    enum: ['Active', 'Inactive', 'Suspended', 'Closed'],
     default: 'Active'
   }
 }, {

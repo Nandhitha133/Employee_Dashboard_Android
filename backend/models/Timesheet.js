@@ -4,7 +4,7 @@ const TimesheetEntrySchema = new mongoose.Schema({
   project: { type: String, required: true },
   projectCode: { type: String, default: "" },
   task: { type: String, required: true },
-  type: { type: String, enum: ["project", "leave"], default: "project" },
+  type: { type: String, enum: ["project", "leave", "special"], default: "project" },
   hours: { type: [Number], default: [0, 0, 0, 0, 0, 0, 0] },
   locked: { type: Boolean, default: false },
   lockedDays: { type: [Boolean], default: [false, false, false, false, false, false, false] }
@@ -64,33 +64,8 @@ function calculateTotalHoursWithBreak(sheet) {
   }, 0);
   
   const computeBreakForDay = (dayIndex) => {
-    const shifts = Array.isArray(sheet.dailyShiftTypes) ? sheet.dailyShiftTypes : [];
-    const getShiftBreakHours = (shift) => {
-      if (!shift) return 0;
-      const s = String(shift);
-      if (s.startsWith("First Shift")) return 65 / 60;
-      if (s.startsWith("Second Shift")) return 60 / 60;
-      if (s.startsWith("General Shift")) return 75 / 60;
-      return 0;
-    };
-
-    const hasProjectWork = entries.some((entry) => {
-      if (entry.type !== 'project') return false;
-      const hrs = Array.isArray(entry.hours) ? entry.hours : [];
-      return (Number(hrs[dayIndex] || 0) > 0);
-    });
-    
-    const hasApprovedLeaveOrHoliday = entries.some((entry) => {
-      const hrs = Array.isArray(entry.hours) ? entry.hours : [];
-      const val = Number(hrs[dayIndex] || 0);
-      const task = (entry.task || '').toLowerCase();
-      // Check for Holiday or ANY Approved Leave (Full or Half)
-      return ((task.includes('leave approved') || task.includes('holiday')) && val > 0);
-    });
-    
-    const shiftForDay = shifts[dayIndex] || sheet.shiftType || "";
-    const breakByShift = getShiftBreakHours(shiftForDay);
-    return hasProjectWork && !hasApprovedLeaveOrHoliday ? breakByShift : 0;
+    // Break time is disabled/removed per requirement
+    return 0;
   };
   
   const breakDaily = [0, 1, 2, 3, 4, 5, 6].map(computeBreakForDay);

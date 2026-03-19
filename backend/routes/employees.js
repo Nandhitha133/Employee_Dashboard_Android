@@ -4,6 +4,33 @@ const router = express.Router();
 const Employee = require('../models/Employee');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
+const Team = require('../models/Team');
+
+// Helper to get team assignments (duplicated from admintimesheetRoutes to maintain consistency)
+async function getTeamManagementAssignmentSets(userEmployeeId) {
+  const teams = await Team.find({ teamCode: { $regex: /^TEAM-/i } })
+    .select("leaderEmployeeId members")
+    .lean();
+
+  const allAssigned = new Set();
+  const mine = new Set();
+
+  for (const t of teams) {
+    const members = Array.isArray(t.members) ? t.members : [];
+    for (const m of members) {
+      if (!m) continue;
+      allAssigned.add(m);
+      if (userEmployeeId && t.leaderEmployeeId === userEmployeeId) {
+        mine.add(m);
+      }
+    }
+  }
+
+  return {
+    allAssignedMemberIds: Array.from(allAssigned),
+    myAssignedMemberIds: Array.from(mine)
+  };
+}
 
 // Get all employees - restricted based on user permissions
 router.get('/', auth, async (req, res) => {
@@ -26,6 +53,10 @@ router.get('/', auth, async (req, res) => {
         'position': 1,
         'division': 1,
         'branch': 1,
+        'location': 1,
+        'dateOfJoining': 1,
+        'dateOfBirth': 1,
+        'mobileNo': 1,
         '_id': 1
       }).sort({ name: 1 });
       return res.json(employees);
@@ -60,6 +91,53 @@ router.get('/me', auth, async (req, res) => {
     const employee = await Employee.findOne({ employeeId: empId });
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
     res.json(employee);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get employees for timesheet purposes only (limited data)
+router.get('/timesheet/employees', auth, async (req, res) => {
+  try {
+    // Check if user has timesheet access
+    if (!req.user.permissions?.includes('timesheet_access')) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const role = String(req.user?.role || "").toLowerCase();
+    const isAdmin = role === "admin";
+    const isPM = role === "projectmanager" || role === "project_manager";
+    const { allAssignedMemberIds, myAssignedMemberIds } = await getTeamManagementAssignmentSets(req.user?.employeeId);
+
+    let query = {};
+    if (isAdmin) {
+      // No filter
+    } else if (isPM) {
+       if (myAssignedMemberIds.length === 0) {
+          return res.json([]); 
+       }
+       query.employeeId = { $in: myAssignedMemberIds };
+    } else {
+       // Reporting Manager (unassigned employees)
+       if (allAssignedMemberIds.length > 0) {
+         query.employeeId = { $nin: allAssignedMemberIds };
+       }
+    }
+
+    // Return only basic employee info needed for timesheets
+    const employees = await Employee.find(query, {
+      'name': 1,
+      'employeeId': 1,
+      'email': 1,
+      'department': 1,
+      'designation': 1,
+      'position': 1,
+      'division': 1,
+      'location': 1,
+      '_id': 1
+    }).sort({ name: 1 });
+    
+    res.json(employees);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -357,31 +435,6 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Employee not found' });
     }
     res.json({ message: 'Employee deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get employees for timesheet purposes only (limited data)
-router.get('/timesheet/employees', auth, async (req, res) => {
-  try {
-    // Check if user has timesheet access
-    if (!req.user.permissions?.includes('timesheet_access')) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Return only basic employee info needed for timesheets
-    const employees = await Employee.find({}, {
-      'name': 1,
-      'employeeId': 1,
-      'email': 1,
-      'department': 1,
-      'designation': 1,
-      'position': 1,
-      '_id': 1
-    }).sort({ name: 1 });
-    
-    res.json(employees);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

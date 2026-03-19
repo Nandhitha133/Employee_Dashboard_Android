@@ -10,29 +10,56 @@ const Employee = require('../models/Employee');
 router.get('/', auth, async (req, res) => {
   try {
     // In a real app, you might check req.user.role === 'Director'
-    
+
+    // Strict Visibility Rule: Only assigned Director can view
+    // Sequential Flow: Include all post-review stages including final Reviewed state
+    const statusFilter = { $in: ['REVIEWER_COMPLETED', 'DIRECTOR_APPROVED', 'RELEASED', 'Reviewed'] };
+
+    const role = (req.user.role || '').toLowerCase();
+    const isDirector = role === 'director';
+    const isAdmin = role === 'admin';
+
+    if (!isDirector && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view director appraisals' });
+    }
+
+    const query = {
+      $and: [
+        { status: statusFilter },
+        {
+          $or: [
+            { directorId: req.user.employeeId },
+            { director: req.user.name }
+          ]
+        }
+      ]
+    };
+
     // Populate employee details
-    const appraisals = await SelfAppraisal.find()
-      .populate('employeeId', 'name employeeId designation department avatar ctc');
+    const appraisals = await SelfAppraisal.find(query)
+      .populate('employeeId', 'name employeeId designation department division avatar ctc location branch');
 
     // Transform to frontend format
     const formattedAppraisals = appraisals.map(app => {
       const emp = app.employeeId || {};
-      
+
       return {
         id: app._id,
         financialYr: app.year,
+        employeeMongoId: emp._id,
         empId: emp.employeeId || 'N/A',
         name: emp.name || 'Unknown',
         avatar: emp.avatar || (emp.name ? emp.name[0] : '?'),
         designation: emp.designation || 'N/A',
         department: emp.department || 'N/A',
+        division: app.division || emp.division || 'N/A',
+        location: emp.location || emp.branch || 'Chennai',
         status: app.status,
-        
+
         // Appraisal content
         selfAppraiseeComments: app.overallContribution || '',
         managerComments: app.managerComments || '',
-        
+
         // Reviewer content
         reviewerComments: app.reviewerComments || '',
         directorComments: app.directorComments || '',
@@ -56,11 +83,11 @@ router.get('/', auth, async (req, res) => {
 
 // @desc    Update appraisal status (Approve/Reject)
 // @route   PUT /api/performance/director/:id
-// @access  Private (Director)
+// @access  Private (Director/Admin)
 router.put('/:id', auth, async (req, res) => {
   try {
-    const { 
-      status, 
+    const {
+      status,
       directorComments,
       incrementPercentage,
       incrementCorrectionPercentage,
@@ -73,7 +100,34 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Appraisal not found' });
     }
 
-    if (status) appraisal.status = status;
+    const role = (req.user.role || '').toLowerCase();
+    const isDirectorRole = role === 'director';
+    const isAdmin = role === 'admin';
+
+    if (!isDirectorRole && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this appraisal' });
+    }
+
+    const userEmployeeId = req.user.employeeId;
+    const userName = req.user.name;
+
+    const isDirectorAssigned =
+      (appraisal.directorId && appraisal.directorId === userEmployeeId) ||
+      (appraisal.director && appraisal.director === userName);
+
+    if (!isDirectorAssigned) {
+      return res
+        .status(403)
+        .json({ success: false, message: 'Not authorized to update this appraisal' });
+    }
+
+    if (status) {
+      appraisal.status = status;
+      if (status === 'DIRECTOR_APPROVED') {
+        appraisal.employeeAcceptanceStatus = 'PENDING';
+        appraisal.finalStatus = undefined;
+      }
+    }
     if (directorComments !== undefined) appraisal.directorComments = directorComments;
     if (incrementPercentage !== undefined) appraisal.incrementPercentage = incrementPercentage;
     if (incrementCorrectionPercentage !== undefined) appraisal.incrementCorrectionPercentage = incrementCorrectionPercentage;
@@ -99,7 +153,7 @@ router.put('/:id', auth, async (req, res) => {
 
 // @desc    Batch Release Appraisals
 // @route   POST /api/performance/director/release
-// @access  Private (Director)
+// @access  Private (Director/Admin)
 router.post('/release', auth, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -108,12 +162,37 @@ router.post('/release', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No records selected' });
     }
 
-    const appraisals = await SelfAppraisal.find({ _id: { $in: ids } });
-    
+    const role = (req.user.role || '').toLowerCase();
+    const isDirectorRole = role === 'director';
+    const isAdmin = role === 'admin';
+
+    if (!isDirectorRole && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to release appraisals' });
+    }
+
+    const userEmployeeId = req.user.employeeId;
+    const userName = req.user.name;
+
+    const findQuery = {
+      _id: { $in: ids },
+      $or: [
+        { directorId: userEmployeeId },
+        { director: userName }
+      ]
+    };
+
+    const appraisals = await SelfAppraisal.find(findQuery);
+
+    if (!appraisals.length) {
+      return res.status(403).json({ success: false, message: 'No authorized appraisals to release' });
+    }
+
     let modifiedCount = 0;
-    
+
     for (const appraisal of appraisals) {
-      appraisal.status = 'Released';
+      appraisal.status = 'DIRECTOR_APPROVED';
+      appraisal.employeeAcceptanceStatus = 'PENDING';
+      appraisal.finalStatus = undefined;
       appraisal.updatedAt = Date.now();
       await appraisal.save();
 

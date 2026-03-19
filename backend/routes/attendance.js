@@ -1,6 +1,7 @@
 const express = require("express");
 const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
+const AttendanceYearSummary = require("../models/AttendanceYearSummary");
 const auth = require("../middleware/auth");
 
 const router = express.Router();
@@ -11,48 +12,48 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const { employeeId, startDate, endDate, source } = req.query;
-    
+
     const query = {};
     if (employeeId) query.employeeId = employeeId;
     if (source) query.source = source;
-    
+
     if (startDate || endDate) {
       query.punchTime = {};
       if (startDate) query.punchTime.$gte = new Date(startDate);
       if (endDate) query.punchTime.$lte = new Date(endDate + "T23:59:59.999Z");
     }
-    
+
     const attendance = await Attendance.find(query)
       .sort({ punchTime: -1 })
       .limit(1000);
-    
+
     const employeeIds = [...new Set(attendance.map(record => record.employeeId))];
-    const employees = await Employee.find({ 
-      employeeId: { $in: employeeIds } 
+    const employees = await Employee.find({
+      employeeId: { $in: employeeIds }
     }).select('employeeId name');
-    
+
     const employeeMap = employees.reduce((map, emp) => {
       map[emp.employeeId] = emp.name;
       return map;
     }, {});
-    
+
     const enrichedAttendance = attendance.map(record => ({
       ...record.toObject(),
       employeeName: record.employeeName || employeeMap[record.employeeId] || "Unknown Employee"
     }));
-    
+
     res.json({
       success: true,
       attendance: enrichedAttendance,
       count: enrichedAttendance.length
     });
-    
+
   } catch (error) {
     console.error("Get Attendance Error:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Failed to fetch attendance records",
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -63,14 +64,14 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { employeeId, direction, punchTime, deviceId, source, correspondingInTime, workDurationSeconds } = req.body;
-    
+
     if (!employeeId || !direction) {
       return res.status(400).json({
         success: false,
         message: "Employee ID and direction are required"
       });
     }
-    
+
     const employee = await Employee.findOne({ employeeId });
     if (!employee) {
       return res.status(404).json({
@@ -78,7 +79,7 @@ router.post("/", async (req, res) => {
         message: "Employee not found"
       });
     }
-    
+
     const attendanceRecord = await Attendance.create({
       employeeId,
       name: employee.name,
@@ -89,19 +90,19 @@ router.post("/", async (req, res) => {
       correspondingInTime: correspondingInTime ? new Date(correspondingInTime) : undefined,
       workDurationSeconds: typeof workDurationSeconds === "number" ? workDurationSeconds : undefined
     });
-    
+
     res.json({
       success: true,
       message: "Attendance record created successfully",
       attendance: attendanceRecord
     });
-    
+
   } catch (error) {
     console.error("Manual Attendance Entry Error:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Failed to create attendance record",
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -167,74 +168,174 @@ router.post("/save-hikvision-attendance", async (req, res) => {
  */
 router.get("/summary", async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    
+    const { startDate, endDate, financialYear } = req.query;
+
     const matchStage = {};
     if (startDate || endDate) {
       matchStage.punchTime = {};
       if (startDate) matchStage.punchTime.$gte = new Date(startDate);
       if (endDate) matchStage.punchTime.$lte = new Date(endDate + "T23:59:59.999Z");
     }
-    
-    const summary = await Attendance.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: {
-            employeeId: "$employeeId",
-            direction: "$direction"
-          },
-          count: { $sum: 1 },
-          lastPunch: { $max: "$punchTime" }
-        }
-      },
-      {
-        $group: {
-          _id: "$_id.employeeId",
-          totalPunches: { $sum: "$count" },
-          inCount: {
-            $sum: { $cond: [{ $eq: ["$_id.direction", "in"] }, "$count", 0] }
-          },
-          outCount: {
-            $sum: { $cond: [{ $eq: ["$_id.direction", "out"] }, "$count", 0] }
-          },
-          lastPunch: { $max: "$lastPunch" }
-        }
-      },
-      { $sort: { lastPunch: -1 } }
-    ]);
-    
-    const employeeIds = summary.map(item => item._id);
-    const employees = await Employee.find({ 
-      employeeId: { $in: employeeIds } 
+
+    let summary = [];
+
+    if (financialYear === "2025-26") {
+      // For FY 2025-26, use manual year summary only
+      summary = await AttendanceYearSummary.find({ financialYear }).lean();
+    } else {
+      // Default aggregated summary from raw attendance
+      summary = await Attendance.aggregate([
+        { $match: matchStage },
+        {
+          $group: {
+            _id: {
+              employeeId: "$employeeId",
+              direction: "$direction"
+            },
+            count: { $sum: 1 },
+            lastPunch: { $max: "$punchTime" }
+          }
+        },
+        {
+          $group: {
+            _id: "$_id.employeeId",
+            totalPunches: { $sum: "$count" },
+            inCount: {
+              $sum: { $cond: [{ $eq: ["$_id.direction", "in"] }, "$count", 0] }
+            },
+            outCount: {
+              $sum: { $cond: [{ $eq: ["$_id.direction", "out"] }, "$count", 0] }
+            },
+            lastPunch: { $max: "$lastPunch" }
+          }
+        },
+        { $sort: { lastPunch: -1 } }
+      ]);
+    }
+
+    const employeeIds = summary.map(item => item._id || item.employeeId);
+    const employees = await Employee.find({
+      employeeId: { $in: employeeIds }
     }).select('employeeId name');
-    
+
     const employeeMap = employees.reduce((map, emp) => {
       map[emp.employeeId] = emp.name;
       return map;
     }, {});
-    
-    const enrichedSummary = summary.map(item => ({
-      employeeId: item._id,
-      employeeName: employeeMap[item._id] || "Unknown Employee",
-      totalPunches: item.totalPunches,
-      inCount: item.inCount,
-      outCount: item.outCount,
-      lastPunch: item.lastPunch
-    }));
-    
+
+    const enrichedSummary = summary.map(item => {
+      const employeeId = item._id || item.employeeId;
+
+      if (financialYear === "2025-26") {
+        return {
+          employeeId,
+          employeeName: employeeMap[employeeId] || "Unknown Employee",
+          yearlyPresent: item.yearlyPresent || 0,
+          yearlyAbsent: item.yearlyAbsent || 0,
+        };
+      }
+
+      return {
+        employeeId,
+        employeeName: employeeMap[employeeId] || "Unknown Employee",
+        totalPunches: item.totalPunches,
+        inCount: item.inCount,
+        outCount: item.outCount,
+        lastPunch: item.lastPunch
+      };
+    });
+
     res.json({
       success: true,
       summary: enrichedSummary,
-      totalEmployees: enrichedSummary.length
+      totalEmployees: enrichedSummary.length,
+      source: financialYear === "2025-26" ? "manual" : "aggregated"
     });
-    
+
   } catch (error) {
     console.error("Attendance Summary Error:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Failed to generate attendance summary",
-      error: error.message 
+      error: error.message
+    });
+  }
+});
+
+/**
+ * ✏️ SAVE / UPDATE YEAR SUMMARY (Manual)
+ */
+router.put("/year-summary/:employeeId", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { financialYear, yearlyPresent, yearlyAbsent, updatedBy } = req.body;
+
+    if (!financialYear) {
+      return res.status(400).json({
+        success: false,
+        message: "financialYear is required",
+      });
+    }
+
+    const payload = {
+      employeeId,
+      financialYear,
+      yearlyPresent: Number(yearlyPresent) || 0,
+      yearlyAbsent: Number(yearlyAbsent) || 0,
+      updatedBy: updatedBy || "",
+    };
+
+    const doc = await AttendanceYearSummary.findOneAndUpdate(
+      { employeeId, financialYear },
+      payload,
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({
+      success: true,
+      message: "Year summary saved successfully",
+      data: doc,
+    });
+  } catch (error) {
+    console.error("Save Attendance Year Summary Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save year summary",
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * 📄 GET YEAR SUMMARY FOR EMPLOYEE
+ */
+router.get("/year-summary/:employeeId", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { financialYear } = req.query;
+
+    if (!financialYear) {
+      return res.status(400).json({
+        success: false,
+        message: "financialYear is required",
+      });
+    }
+
+    const doc = await AttendanceYearSummary.findOne({
+      employeeId,
+      financialYear,
+    }).lean();
+
+    res.json({
+      success: true,
+      data: doc || null,
+    });
+  } catch (error) {
+    console.error("Get Attendance Year Summary Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get year summary",
+      error: error.message,
     });
   }
 });
@@ -247,9 +348,9 @@ router.get("/my-week", auth, async (req, res) => {
     const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "startDate and endDate are required" 
+      return res.status(400).json({
+        success: false,
+        message: "startDate and endDate are required"
       });
     }
 
@@ -302,7 +403,7 @@ router.get("/my-week", auth, async (req, res) => {
         if (currentIn) {
           const t = new Date(e.punchTime);
           const inT = new Date(currentIn.punchTime);
-          
+
           if (t > inT) {
             if (!currentOut) {
               currentOut = e;
@@ -322,7 +423,7 @@ router.get("/my-week", auth, async (req, res) => {
         }
       }
     }
-    
+
     // Push the last pair if exists
     if (currentIn && currentOut) {
       pairs.push({ start: new Date(currentIn.punchTime), end: new Date(currentOut.punchTime) });
@@ -341,45 +442,68 @@ router.get("/my-week", auth, async (req, res) => {
       const dateKey = new Date(Date.UTC(dayCursor.getFullYear(), dayCursor.getMonth(), dayCursor.getDate()))
         .toISOString()
         .split("T")[0];
-      
+
       const dayPairs = pairs.filter(p => {
         const k = new Date(p.start).toISOString().split("T")[0];
         return k === dateKey;
       });
-      
+
       if (dayPairs.length > 0) {
         const firstIn = dayPairs[0].start;
         const lastOut = dayPairs[dayPairs.length - 1].end;
-        const sumHours = Number(
-          dayPairs
-            .map(p => (p.end - p.start) / (1000 * 60 * 60))
-            .reduce((a, b) => a + b, 0)
-            .toFixed(2)
-        );
+
+        // Find if we have workDurationSeconds stored in any event for this day
+        const dayEvents = events.filter(e => {
+          const d = new Date(e.punchTime);
+          return d.getDate() === dayCursor.getDate() &&
+            d.getMonth() === dayCursor.getMonth() &&
+            d.getFullYear() === dayCursor.getFullYear();
+        });
+
+        // Get the record with the maximum workDurationSeconds (likely the latest punch out)
+        const workDurationRec = dayEvents.reduce((max, e) => {
+          const currentDuration = Number(e.workDurationSeconds) || 0;
+          const maxDuration = max ? (Number(max.workDurationSeconds) || 0) : 0;
+          return currentDuration > maxDuration ? e : max;
+        }, null);
+
+        let sumHours;
+        if (workDurationRec) {
+          sumHours = Number((workDurationRec.workDurationSeconds / 3600).toFixed(2));
+        } else {
+          sumHours = Number(
+            dayPairs
+              .map(p => (p.end - p.start) / (1000 * 60 * 60))
+              .reduce((a, b) => a + b, 0)
+              .toFixed(2)
+          );
+        }
+
         result.push({
           date: dateKey,
           punchIn: firstIn,
           punchOut: lastOut,
           punchTime: firstIn,
-          hours: sumHours
+          hours: sumHours,
+          workDurationSeconds: workDurationRec ? workDurationRec.workDurationSeconds : undefined
         });
       }
 
       dayCursor.setDate(dayCursor.getDate() + 1);
     }
 
-    res.json({ 
-      success: true, 
-      employeeId: employeeIdToUse, 
-      records: result, 
-      weeklyHours: Number(weeklyTotal.toFixed(2)) 
+    res.json({
+      success: true,
+      employeeId: employeeIdToUse,
+      records: result,
+      weeklyHours: Number(weeklyTotal.toFixed(2))
     });
   } catch (error) {
     console.error("My Weekly Attendance Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to fetch weekly attendance", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch weekly attendance",
+      error: error.message
     });
   }
 });
@@ -390,21 +514,21 @@ router.get("/my-week", auth, async (req, res) => {
 router.post("/regularize", auth, async (req, res) => {
   try {
     const { employeeId, inTime, outTime, deviceId, source, workDurationSeconds } = req.body;
-    
+
     if (!inTime || !outTime) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "inTime and outTime are required" 
+      return res.status(400).json({
+        success: false,
+        message: "inTime and outTime are required"
       });
     }
-    
+
     const inDt = new Date(inTime);
     const outDt = new Date(outTime);
-    
+
     if (!(outDt > inDt)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "outTime must be after inTime" 
+      return res.status(400).json({
+        success: false,
+        message: "outTime must be after inTime"
       });
     }
 
@@ -420,9 +544,9 @@ router.post("/regularize", auth, async (req, res) => {
 
     const employee = await Employee.findOne({ employeeId: employeeIdToUse });
     if (!employee) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Employee not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found"
       });
     }
 
@@ -458,8 +582,8 @@ router.post("/regularize", auth, async (req, res) => {
       inRecordId = createdIn._id;
     }
 
-    const durationSecs = typeof workDurationSeconds === "number" 
-      ? workDurationSeconds 
+    const durationSecs = typeof workDurationSeconds === "number"
+      ? workDurationSeconds
       : Math.round((outDt - inDt) / 1000);
 
     if (existingOut) {
@@ -494,7 +618,7 @@ router.post("/regularize", auth, async (req, res) => {
       });
     }
 
-    return res.json({ 
+    return res.json({
       success: true,
       message: "Attendance regularized successfully",
       inTime: inDt,
@@ -503,11 +627,61 @@ router.post("/regularize", auth, async (req, res) => {
     });
   } catch (error) {
     console.error("Attendance Regularize Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to regularize attendance", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Failed to regularize attendance",
+      error: error.message
     });
+  }
+});
+
+/**
+ * ✏️ UPDATE ATTENDANCE RECORD
+ */
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { punchTime, direction, workDurationSeconds, correspondingInTime } = req.body;
+
+    const updateData = {};
+    if (punchTime) updateData.punchTime = new Date(punchTime);
+    if (direction) updateData.direction = direction;
+    if (workDurationSeconds !== undefined) updateData.workDurationSeconds = workDurationSeconds;
+    if (correspondingInTime) updateData.correspondingInTime = new Date(correspondingInTime);
+
+    const updatedRecord = await Attendance.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedRecord) {
+      return res.status(404).json({ success: false, message: "Record not found" });
+    }
+
+    res.json({ success: true, message: "Attendance record updated", attendance: updatedRecord });
+  } catch (error) {
+    console.error("Update Attendance Error:", error);
+    res.status(500).json({ success: false, message: "Failed to update record", error: error.message });
+  }
+});
+
+/**
+ * 🗑️ DELETE ATTENDANCE RECORD
+ */
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedRecord = await Attendance.findByIdAndDelete(id);
+
+    if (!deletedRecord) {
+      return res.status(404).json({ success: false, message: "Record not found" });
+    }
+
+    res.json({ success: true, message: "Attendance record deleted" });
+  } catch (error) {
+    console.error("Delete Attendance Error:", error);
+    res.status(500).json({ success: false, message: "Failed to delete record", error: error.message });
   }
 });
 

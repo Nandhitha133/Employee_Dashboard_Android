@@ -1,7 +1,9 @@
 const express = require("express");
 const Timesheet = require("../models/Timesheet");
 const AdminTimesheet = require("../models/AdminTimesheet");
+const SpecialPermission = require("../models/SpecialPermission");
 const Employee = require("../models/Employee");
+const Notification = require("../models/Notification");
 const User = require("../models/User");
 const auth = require("../middleware/auth");
 const nodemailer = require("nodemailer");
@@ -66,7 +68,7 @@ async function sendTimesheetApprovalRequestEmail(user, sheet) {
     const workWeeklyTotal = entries.reduce((sum, e) => { const hrs = Array.isArray(e.hours) ? e.hours : []; return sum + hrs.reduce((a, b) => a + (Number(b) || 0), 0); }, 0);
     const shifts = Array.isArray(sheet.dailyShiftTypes) ? sheet.dailyShiftTypes : [];
     const getShiftBreakHours = (shift) => { if (!shift) return 0; const s = String(shift); if (s.startsWith("First Shift")) return 65 / 60; if (s.startsWith("Second Shift")) return 60 / 60; if (s.startsWith("General Shift")) return 75 / 60; return 0; };
-    const computeBreakForDay = (dayIndex) => { const hasProjectWork = entries.some((e) => (e.type || 'project') === 'project' && e.task !== 'Office Holiday' && ((e.hours?.[dayIndex] || 0) > 0)); const hasApprovedLeaveOrHoliday = entries.some((e) => { const val = Number(e.hours?.[dayIndex] || 0); const t = (e.task || '').toLowerCase(); return ((t.includes('leave approved') || t.includes('holiday')) && val > 0); }); const shiftForDay = shifts[dayIndex] || sheet.shiftType || ""; const breakByShift = getShiftBreakHours(shiftForDay); return hasProjectWork && !hasApprovedLeaveOrHoliday ? breakByShift : 0; };
+    const computeBreakForDay = (dayIndex) => { return 0; };
     const breakDaily = [0, 1, 2, 3, 4, 5, 6].map((i) => computeBreakForDay(i));
     const breakWeekly = breakDaily.reduce((s, v) => s + v, 0);
     const totalWithBreak = workWeeklyTotal + breakWeekly;
@@ -92,7 +94,7 @@ async function sendTimesheetApprovalRequestEmail(user, sheet) {
             <tr><td style="padding:8px 0;color:#666;"><strong>Week:</strong></td><td style="padding:8px 0;color:#333;">${weekStr}</td></tr>
             <tr><td style="padding:8px 0;color:#666;"><strong>Period:</strong></td><td style="padding:8px 0;color:#333;">${start} to ${end}</td></tr>
             <tr><td style="padding:8px 0;color:#666;"><strong>Work Hours (sum of entries):</strong></td><td style="padding:8px 0;color:#333;font-weight:bold;">${toHHMM(workWeeklyTotal)} hours</td></tr>
-            <tr><td style="padding:8px 0;color:#666;"><strong>Break Hours:</strong></td><td style="padding:8px 0;color:#333;">${toHHMM(breakWeekly)} hours</td></tr>
+            <!-- <tr><td style="padding:8px 0;color:#666;"><strong>Break Hours:</strong></td><td style="padding:8px 0;color:#333;">${toHHMM(breakWeekly)} hours</td></tr> -->
             <tr><td style="padding:8px 0;color:#666;"><strong>Total Hours:</strong></td><td style="padding:8px 0;color:#333;font-weight:bold;">${toHHMM(totalWithBreak)} hours</td></tr>
             <tr><td style="padding:8px 0;color:#666;"><strong>Status:</strong></td><td style="padding:8px 0;color:#4F46E5;font-weight:bold;">${sheet.status || 'Submitted'}</td></tr>
             <tr><td style="padding:8px 0;color:#666;"><strong>Submitted On:</strong></td><td style="padding:8px 0;color:#333;">${new Date().toLocaleString()}</td></tr>
@@ -152,7 +154,7 @@ async function sendTimesheetApprovalRequestEmail(user, sheet) {
     const from = "support@caldimengg.in";
     const subject = `Timesheet Submitted - Awaiting Approval (${weekStr})`;
     const html = approvalBanner + baseHtml;
-    const mailOptions = { from: `"Timesheet System" <${from}>`, to: recipients.join(","), subject, html };
+    const mailOptions = { from: `"Timesheet System" <${from}>`, to: recipients.join(""), subject, html };
     const info = await mailer.sendMail(mailOptions);
     return { success: true, messageId: info.messageId, to: recipients };
   } catch (e) {
@@ -242,13 +244,7 @@ async function sendTimesheetSubmittedEmail(user, sheet) {
       return sum + hrs.reduce((a, b) => a + (Number(b) || 0), 0);
     }, 0);
     const computeBreakForDay = (dayIndex) => {
-      const hasProjectWork = entries.some((e) => (e.type || 'project') === 'project' && e.task !== 'Office Holiday' && ((e.hours?.[dayIndex] || 0) > 0));
-      const hasApprovedLeaveOrHoliday = entries.some((e) => {
-        const val = Number(e.hours?.[dayIndex] || 0);
-        const t = (e.task || '').toLowerCase();
-        return ((t.includes('leave approved') || t.includes('holiday')) && val > 0);
-      });
-      return hasProjectWork && !hasApprovedLeaveOrHoliday ? 1.25 : 0;
+      return 0;
     };
     const breakDaily = [0, 1, 2, 3, 4, 5, 6].map((i) => computeBreakForDay(i));
     const breakWeekly = breakDaily.reduce((s, v) => s + v, 0);
@@ -319,10 +315,10 @@ async function sendTimesheetSubmittedEmail(user, sheet) {
               <td style="padding:8px 0;color:#666;"><strong>Work Hours (sum of entries):</strong></td>
               <td style="padding:8px 0;color:#333;font-weight:bold;">${toHHMM(workWeeklyTotal)} hours</td>
             </tr>
-            <tr>
+            <!-- <tr>
               <td style="padding:8px 0;color:#666;"><strong>Break Hours:</strong></td>
               <td style="padding:8px 0;color:#333;">${toHHMM(breakWeekly)} hours</td>
-            </tr>
+            </tr> -->
             <tr>
               <td style="padding:8px 0;color:#666;"><strong>Total Hours:</strong></td>
               <td style="padding:8px 0;color:#333;font-weight:bold;">${toHHMM(totalWithBreak)} hours</td>
@@ -463,7 +459,10 @@ async function sendPermissionUsageEmail(user, sheet) {
   try {
     // Only proceed if the submitted sheet contains any Permission entries
     const entries = Array.isArray(sheet.entries) ? sheet.entries : [];
-    const hasPermission = entries.some((e) => (e.type || 'project') === 'leave' && (e.task || '').toLowerCase().includes('permission'));
+    const hasPermission = entries.some((e) => 
+      ((e.type || 'project') === 'leave') && 
+      (e.task || '').toLowerCase().includes('permission') && e.type !== 'special' && e.project !== 'Special Permission'
+    );
     if (!hasPermission) {
       return { success: false, skipped: true, reason: 'No permission entries in sheet' };
     }
@@ -478,7 +477,8 @@ async function sendPermissionUsageEmail(user, sheet) {
     const countPermissionsInEntries = (entriesList) => {
       let count = 0;
       (entriesList || []).forEach((e) => {
-        const isPermission = (e.type || 'project') === 'leave' && (e.task || '').toLowerCase().includes('permission');
+        const isPermission = ((e.type || 'project') === 'leave') && 
+                             (e.task || '').toLowerCase().includes('permission') && e.type !== 'special' && e.project !== 'Special Permission';
         if (!isPermission) return;
         const hrs = Array.isArray(e.hours) ? e.hours : [];
         for (let i = 0; i < 7; i++) {
@@ -653,7 +653,8 @@ router.post("/", auth, async (req, res) => {
     const countPermissionsInEntriesForMonth = (entriesList, sheetWeekStart, targetMonth, targetYear) => {
       let count = 0;
       (entriesList || []).forEach((e) => {
-        const isPermission = (e.type || "project") === "leave" && (e.task || "").toLowerCase().includes("permission");
+        const isPermission = ((e.type || "project") === "leave") && 
+                             (e.task || "").toLowerCase().includes("permission") && e.type !== 'special' && e.project !== 'Special Permission';
         if (!isPermission) return;
         const hrs = Array.isArray(e.hours) ? e.hours : [];
         for (let i = 0; i < 7; i++) {
@@ -707,15 +708,8 @@ router.post("/", auth, async (req, res) => {
       }, 0);
     });
     const computeBreakForDay = (dayIndex) => {
-      const hasProjectWork = entriesArray.some(
-        (e) => (e.type || "project") === "project" && ((e.hours?.[dayIndex] || 0) > 0)
-      );
-      const hasApprovedLeaveOrHoliday = entriesArray.some((e) => {
-        const val = Number(e.hours?.[dayIndex] || 0);
-        const t = (e.task || "").toLowerCase();
-        return ((t.includes('leave approved') || t.includes('holiday')) && val > 0);
-      });
-      return hasProjectWork && !hasApprovedLeaveOrHoliday ? 1.25 : 0;
+      // Break time is disabled/removed per requirement
+      return 0;
     };
     const breakDaily = dayIndices.map((i) => computeBreakForDay(i));
     const breakWeekly = breakDaily.reduce((s, v) => s + v, 0);
@@ -725,7 +719,44 @@ router.post("/", auth, async (req, res) => {
 
     if (sheet) {
       // Update existing timesheet
-      sheet.entries = entries;
+      
+      // Sync special permissions from DB to ensure they are up-to-date and not lost
+      const specialPermissions = await SpecialPermission.find({
+        userId,
+        status: 'APPROVED',
+        date: { $gte: weekStart, $lte: weekEnd }
+      });
+
+      const specialEntriesFromDB = specialPermissions.map(sp => {
+        const d = new Date(sp.date);
+        const dayIndex = (d.getUTCDay() + 6) % 7;
+        const hours = Array(7).fill(0);
+        hours[dayIndex] = sp.totalHours;
+        
+        const taskName = (sp.fromTime && sp.toTime) 
+          ? `Permission (${sp.fromTime} - ${sp.toTime})` 
+          : 'Permission';
+
+        return {
+          project: 'Special Permission',
+          projectCode: 'SP',
+          task: taskName,
+          type: 'special',
+          hours: hours,
+          locked: true,
+          lockedDays: Array(7).fill(false).map((_, i) => i === dayIndex)
+        };
+      });
+
+      if (specialEntriesFromDB.length > 0) {
+         console.log(`[Timesheet] Synced ${specialEntriesFromDB.length} special permission entries from DB for user ${userId}`);
+      }
+      
+      const incomingEntries = Array.isArray(entries) ? entries : [];
+      const incomingNonSpecialEntries = incomingEntries.filter(e => e.type !== 'special');
+      
+      sheet.entries = [...incomingNonSpecialEntries, ...specialEntriesFromDB];
+
       if (!sheet.employeeId && employeeId) sheet.employeeId = employeeId;
       if (!sheet.employeeName && employeeName) sheet.employeeName = employeeName;
       sheet.totalHours = totalHours;
@@ -758,6 +789,27 @@ router.post("/", auth, async (req, res) => {
         } else {
           console.log("⚠️ Timesheet submitted but email may not have been sent:", emailResult?.error);
         }
+
+        // Create notification
+        try {
+          await Notification.create({
+            recipient: req.user._id,
+            title: 'Timesheet Submitted',
+            message: `Your timesheet for week starting ${new Date(sheet.weekStartDate).toLocaleDateString()} has been submitted.`,
+            type: 'TIMESHEET_SUBMIT'
+          });
+          const admins = await User.find({ role: 'admin' }).select('_id');
+          for (const admin of admins) {
+            await Notification.create({
+              recipient: admin._id,
+              title: 'Timesheet Submitted',
+              message: `${req.user.name} submitted timesheet for week starting ${new Date(sheet.weekStartDate).toLocaleDateString()}.`,
+              type: 'TIMESHEET_SUBMIT'
+            });
+          }
+        } catch (err) {
+          console.error('Error creating timesheet submission notification:', err);
+        }
       }
 
       return res.json({
@@ -769,11 +821,49 @@ router.post("/", auth, async (req, res) => {
     }
 
     // Create brand new timesheet
+    
+    // Sync special permissions from DB for new timesheet as well
+    const specialPermissions = await SpecialPermission.find({
+      userId,
+      status: 'APPROVED',
+      date: { $gte: weekStart, $lte: weekEnd }
+    });
+
+    const specialEntriesFromDB = specialPermissions.map(sp => {
+      const d = new Date(sp.date);
+      const dayIndex = (d.getUTCDay() + 6) % 7;
+      const hours = Array(7).fill(0);
+      hours[dayIndex] = sp.totalHours;
+      
+      const taskName = (sp.fromTime && sp.toTime) 
+        ? `Permission (${sp.fromTime} - ${sp.toTime})` 
+        : 'Permission';
+
+      return {
+        project: 'Special Permission',
+        projectCode: 'SP',
+        task: taskName,
+        type: 'special',
+        hours: hours,
+        locked: true,
+        lockedDays: Array(7).fill(false).map((_, i) => i === dayIndex)
+      };
+    });
+
+    if (specialEntriesFromDB.length > 0) {
+       console.log(`[Timesheet] Synced ${specialEntriesFromDB.length} special permission entries from DB for new timesheet (user ${userId})`);
+    }
+
+    const initialEntries = Array.isArray(entries) ? entries : [];
+    // Filter out any potential special entries from input (though unlikely for new sheet)
+    const filteredInitialEntries = initialEntries.filter(e => e.type !== 'special');
+    const finalEntries = [...filteredInitialEntries, ...specialEntriesFromDB];
+
     sheet = await Timesheet.create({
       userId,
       weekStartDate: weekStart,
       weekEndDate: weekEnd,
-      entries,
+      entries: finalEntries,
       totalHours,
       employeeId,
       employeeName,
@@ -800,6 +890,18 @@ router.post("/", auth, async (req, res) => {
         console.log("✅ Email sent successfully for new timesheet");
       } else {
         console.log("⚠️ Timesheet submitted but email may not have been sent:", emailResult?.error);
+      }
+
+      // Create notification
+      try {
+        await Notification.create({
+          recipient: req.user._id,
+          title: 'Timesheet Submitted',
+          message: `Your timesheet for week starting ${new Date(sheet.weekStartDate).toLocaleDateString()} has been submitted.`,
+          type: 'TIMESHEET_SUBMIT'
+        });
+      } catch (err) {
+        console.error('Error creating timesheet submission notification:', err);
       }
     }
 
@@ -941,7 +1043,7 @@ router.get("/permissions/usage", auth, async (req, res) => {
       const sheetStart = new Date(sheet.weekStartDate);
 
       (sheet.entries || []).forEach(entry => {
-        if (entry.task === "Permission") {
+        if (entry.task && (entry.task === "Permission" || entry.task.toLowerCase().includes("permission")) && entry.type !== 'special' && entry.project !== 'Special Permission') {
           (entry.hours || []).forEach((hours, dayIndex) => {
             if (hours > 0) {
               const entryDate = new Date(sheetStart);

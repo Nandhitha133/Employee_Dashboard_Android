@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Picker } from '@react-native-picker/picker';
+const PickerItem = Picker.Item as any;
 import { employeeAPI, payrollAPI, monthlyPayrollAPI, leaveAPI, loanAPI, mailAPI } from '../../services/api';
 import CommonHeader from '../../components/CommonHeader';
 import CommonFooter from '../../components/CommonFooter';
@@ -1300,11 +1301,11 @@ Payroll Department
                 <Picker
                   selectedValue={filterBank}
                   onValueChange={(value) => setFilterBank(value)}
-                  style={{ height: 50, color: COLORS.dropdownText }}
+                  style={{ height: 45, color: COLORS.dropdownText }}
                   dropdownIconColor={COLORS.primary}
                 >
                   {bankOptions.map(option => (
-                    <Picker.Item key={option.value} label={option.label} value={option.value} color={COLORS.dropdownText} />
+                    <PickerItem key={option.value} label={option.label} value={option.value} color={COLORS.dropdownText} />
                   ))}
                 </Picker>
               </View>
