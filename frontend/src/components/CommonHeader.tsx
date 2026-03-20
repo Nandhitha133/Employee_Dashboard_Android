@@ -28,6 +28,7 @@ interface CommonHeaderProps {
   onMenuPress?: () => void;
   onBack?: () => void;
   rightComponent?: React.ReactNode;
+  showNotification?: boolean;
   currentTime?: string;
   greeting?: string;
   userName?: string;
@@ -40,6 +41,7 @@ const CommonHeader: React.FC<CommonHeaderProps> = ({
   onMenuPress,
   onBack,
   rightComponent,
+  showNotification = true,
   currentTime,
   greeting,
   userName,
@@ -75,15 +77,17 @@ const CommonHeader: React.FC<CommonHeaderProps> = ({
           <Text style={styles.headerTitle}>{title}</Text>
         </View>
         
-        {rightComponent ? (
-          rightComponent
-        ) : (
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerIcon}>
+        <View style={styles.headerRight}>
+          {rightComponent}
+          {showNotification && (
+            <TouchableOpacity 
+              onPress={() => (navigation as any).navigate('Notifications')}
+              style={styles.headerIcon}
+            >
               <Icon name="notifications" size={24} color={COLORS.white} />
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </View>
 
       {/* Time and Greeting Section - Optional */}

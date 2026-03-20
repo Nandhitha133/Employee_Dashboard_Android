@@ -1266,24 +1266,7 @@ const DashboardScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
         }
       >
-        {/* Profile Card (visible when not searching) */}
-        {!searchTerm && profile && (
-          <TouchableOpacity 
-            style={styles.profileCard}
-            onPress={() => navigation.navigate('MyProfile', { user: profile })}
-          >
-            <View style={styles.profileCardLeft}>
-              <View style={styles.profileAvatar}>
-                <Text style={styles.profileAvatarText}>{profile.name.charAt(0)}</Text>
-              </View>
-              <View>
-                <Text style={styles.profileCardName}>{profile.name}</Text>
-                <Text style={styles.profileCardDesignation}>{profile.designation}</Text>
-              </View>
-            </View>
-            <Icon name="chevron-right" size={24} color="#9CA3AF" />
-          </TouchableOpacity>
-        )}
+       
 
         {searchTerm ? (
           // Search Results

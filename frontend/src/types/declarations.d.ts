@@ -28,7 +28,7 @@ declare module '@react-native-async-storage/async-storage' {
 
 // Picker
 declare module '@react-native-picker/picker' {
-  import { Component } from 'react';
+  import { Component, ComponentType } from 'react';
   import { ViewProps } from 'react-native';
 
   export interface PickerProps extends ViewProps {
@@ -38,11 +38,13 @@ declare module '@react-native-picker/picker' {
     mode?: 'dialog' | 'dropdown';
     prompt?: string;
     style?: any;
+    itemStyle?: any;
     dropdownIconColor?: string;
+    children?: React.ReactNode;
   }
 
   export class Picker extends Component<PickerProps> {
-    static Item: Component<{ label: string; value: any; color?: string }>;
+    static Item: ComponentType<{ label: string; value: any; color?: string }>;
   }
 }
 

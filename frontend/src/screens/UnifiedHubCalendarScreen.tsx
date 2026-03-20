@@ -27,6 +27,9 @@ import Confetti from 'react-native-confetti';
 
 const { width } = Dimensions.get('window');
 
+// Calculate day cell size (7 days per row)
+const DAY_CELL_SIZE = (width - 32) / 7; // Subtract padding (16 left + 16 right = 32)
+
 // Enhanced color palette
 const COLORS = {
   primary: '#0A0F2C',
@@ -49,19 +52,22 @@ const COLORS = {
   textPrimary: '#2D3436',
   textSecondary: '#636E72',
   border: '#E9ECEF',
+  weekend: '#FF6B6B',
+  today: '#4A90E2',
+  event: '#9B59B6',
 };
 
 // Holiday Calendar 2026 data
 const HOLIDAYS_2026 = [
-  { date: '01-Jan-26', day: 'THURSDAY', occasion: 'NEW YEAR' },
-  { date: '15-Jan-26', day: 'THURSDAY', occasion: 'THAI PONGAL' },
-  { date: '16-Jan-26', day: 'FRIDAY', occasion: 'MATTU PONGAL' },
-  { date: '26-Jan-26', day: 'MONDAY', occasion: 'REPUBLIC DAY' },
-  { date: '14-Apr-26', day: 'TUESDAY', occasion: 'TAMIL NEW YEAR' },
-  { date: '01-May-26', day: 'FRIDAY', occasion: 'LABOUR DAY' },
-  { date: '14-Sep-26', day: 'MONDAY', occasion: 'VINAYAGAR CHATHURTHI' },
-  { date: '02-Oct-26', day: 'FRIDAY', occasion: 'GANDHI JAYANTHI' },
-  { date: '19-Oct-26', day: 'MONDAY', occasion: 'AYUDHA POOJA' },
+  { date: '2026-01-01', day: 'THURSDAY', occasion: 'NEW YEAR' },
+  { date: '2026-01-15', day: 'THURSDAY', occasion: 'THAI PONGAL' },
+  { date: '2026-01-16', day: 'FRIDAY', occasion: 'MATTU PONGAL' },
+  { date: '2026-01-26', day: 'MONDAY', occasion: 'REPUBLIC DAY' },
+  { date: '2026-04-14', day: 'TUESDAY', occasion: 'TAMIL NEW YEAR' },
+  { date: '2026-05-01', day: 'FRIDAY', occasion: 'LABOUR DAY' },
+  { date: '2026-09-14', day: 'MONDAY', occasion: 'VINAYAGAR CHATHURTHI' },
+  { date: '2026-10-02', day: 'FRIDAY', occasion: 'GANDHI JAYANTHI' },
+  { date: '2026-10-19', day: 'MONDAY', occasion: 'AYUDHA POOJA' },
 ];
 
 // Day headers
@@ -72,7 +78,13 @@ const DAYS = [
   { name: 'WED', color: '#FFB347' },
   { name: 'THU', color: '#9B59B6' },
   { name: 'FRI', color: '#3498DB' },
-  { name: 'SAT', color: '#E67E22' },
+  { name: 'SAT', color: '#FF8C42' },
+];
+
+// Month names
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
 // Interfaces
@@ -172,7 +184,6 @@ const UnifiedHubCalendarScreen = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDateDetails, setShowDateDetails] = useState(false);
   const [dateEvents, setDateEvents] = useState<any[]>([]);
-  const [showConfetti, setShowConfetti] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -188,7 +199,6 @@ const UnifiedHubCalendarScreen = () => {
     if (confettiRef.current) {
       confettiRef.current.startConfetti();
       
-      // Animate the celebration indicator
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -260,25 +270,39 @@ const UnifiedHubCalendarScreen = () => {
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
+    const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const days: (Date | null)[] = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+    
+    // Add empty cells for days before the first day of month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    
+    // Add actual days
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    // Add empty cells to complete the grid (to have multiple of 7)
+    const remainingCells = 7 - (days.length % 7);
+    if (remainingCells !== 7) {
+      for (let i = 0; i < remainingCells; i++) {
+        days.push(null);
+      }
+    }
 
     return days;
   };
 
   const parseDate = (dateStr: string): Date | null => {
     if (!dateStr || dateStr === 'REGIONAL') return null;
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return new Date(dateStr);
-    const months: { [key: string]: number } = {
-      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-    };
-    return new Date(2000 + parseInt(parts[2]), months[parts[1]], parseInt(parts[0]));
+    if (dateStr.includes('-')) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    return new Date(dateStr);
   };
 
   const isSameDay = (d1: Date, d2: Date): boolean => {
@@ -311,7 +335,7 @@ const UnifiedHubCalendarScreen = () => {
         type: 'holiday',
         title: holiday.occasion,
         color: COLORS.holiday,
-        icon: 'home',
+        icon: '🏖️',
         iconFamily: 'MaterialCommunityIcons'
       });
     }
@@ -319,31 +343,34 @@ const UnifiedHubCalendarScreen = () => {
     // 2. Personal Leave
     const leave = data.leaves.find(l => {
       if (l.status !== 'Approved') return false;
-      const startDate = new Date(l.startDate).setHours(0, 0, 0, 0);
-      const endDate = new Date(l.endDate).setHours(23, 59, 59, 999);
-      const currentDateTime = date.setHours(12, 0, 0, 0);
-      return currentDateTime >= startDate && currentDateTime <= endDate;
+      const startDate = new Date(l.startDate);
+      const endDate = new Date(l.endDate);
+      return date >= startDate && date <= endDate;
     });
     if (leave) {
       events.push({
         type: 'leave',
         title: `${leave.leaveType} Leave`,
         color: COLORS.leave,
-        icon: 'airplane-takeoff',
+        icon: '✈️',
         iconFamily: 'MaterialCommunityIcons',
         data: leave
       });
     }
 
     // 3. Celebrations
-    const celebs = data.celebrations.filter(c => isSameDay(new Date(c.eventDate), date));
+    const celebs = data.celebrations.filter(c => {
+      const eventDate = new Date(c.eventDate);
+      return isSameDay(eventDate, date);
+    });
+    
     celebs.forEach(c => {
       if (c.eventType === 'Birthday') {
         events.push({
           type: 'birthday',
           title: c.employeeName,
           color: COLORS.birthday,
-          icon: 'cake',
+          icon: '🎂',
           iconFamily: 'MaterialCommunityIcons',
           data: c
         });
@@ -352,7 +379,7 @@ const UnifiedHubCalendarScreen = () => {
           type: 'anniversary',
           title: c.employeeName,
           color: COLORS.anniversary,
-          icon: 'party-popper',
+          icon: '🎉',
           iconFamily: 'MaterialCommunityIcons',
           data: c
         });
@@ -367,7 +394,6 @@ const UnifiedHubCalendarScreen = () => {
     setDateEvents(events);
     setShowDateDetails(true);
     
-    // Trigger confetti if it's a celebration day
     if (events.some(e => e.type === 'birthday' || e.type === 'anniversary')) {
       triggerConfetti();
     }
@@ -403,6 +429,10 @@ const UnifiedHubCalendarScreen = () => {
       case 'Birthdays':
         return data.celebrations
           .filter(c => c.eventType === 'Birthday')
+          .filter(c => {
+            const eventDate = new Date(c.eventDate);
+            return eventDate.getMonth() === month && eventDate.getFullYear() === year;
+          })
           .sort((a, b) => new Date(a.eventDate).getDate() - new Date(b.eventDate).getDate())
           .map(c => ({
             name: c.employeeName,
@@ -419,6 +449,10 @@ const UnifiedHubCalendarScreen = () => {
       case 'Anniversaries':
         return data.celebrations
           .filter(c => c.eventType === 'Work Anniversary')
+          .filter(c => {
+            const eventDate = new Date(c.eventDate);
+            return eventDate.getMonth() === month && eventDate.getFullYear() === year;
+          })
           .sort((a, b) => new Date(a.eventDate).getDate() - new Date(b.eventDate).getDate())
           .map(c => ({
             name: c.employeeName,
@@ -467,8 +501,6 @@ const UnifiedHubCalendarScreen = () => {
       setWishMessage('');
       fetchUnifiedData();
       Alert.alert('Success', 'Wish sent successfully');
-      
-      // Trigger confetti when wish is sent
       triggerConfetti();
     } catch (error) {
       console.error("Error sending wish:", error);
@@ -485,7 +517,6 @@ const UnifiedHubCalendarScreen = () => {
     return 'isWished' in item;
   };
 
-  // Format date for display
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { 
       weekday: 'long', 
@@ -499,7 +530,6 @@ const UnifiedHubCalendarScreen = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       
-      {/* Confetti Component */}
       <Confetti
         ref={confettiRef}
         confettiCount={100}
@@ -509,14 +539,10 @@ const UnifiedHubCalendarScreen = () => {
         colors={['#FF6B6B', '#4ECDC4', '#FF9F1C', '#6C5CE7', '#FFB347', '#9B59B6']}
       />
 
-      {/* Celebration Animation Overlay */}
       <Animated.View
         style={[
           styles.celebrationOverlay,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
-          }
+          { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
         ]}
         pointerEvents="none"
       >
@@ -526,7 +552,6 @@ const UnifiedHubCalendarScreen = () => {
         </View>
       </Animated.View>
       
-      {/* Header */}
       <LinearGradient 
         colors={[COLORS.primary, COLORS.secondary]} 
         start={{x: 0, y: 0}} 
@@ -541,9 +566,17 @@ const UnifiedHubCalendarScreen = () => {
             <IconCommunity name="calendar-month" size={24} color={COLORS.white} />
             <Text style={styles.headerTitle}>Unified Hub Calendar</Text>
           </View>
-          <TouchableOpacity style={styles.headerRight}>
-            <Icon name="more-vert" size={24} color={COLORS.white} />
-          </TouchableOpacity>
+          <View style={styles.headerRightContainer}>
+            <TouchableOpacity 
+              onPress={() => (navigation as any).navigate('Notifications')}
+              style={styles.headerIcon}
+            >
+              <Icon name="notifications" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerRight}>
+              <Icon name="more-vert" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
         </View>
       </LinearGradient>
 
@@ -596,178 +629,63 @@ const UnifiedHubCalendarScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* History Panel */}
-          {(showHistoryPanel === 'Birthday' || showHistoryPanel === 'Anniversary') && (
-            <View style={styles.historyPanel}>
-              <LinearGradient
-                colors={['#F8F9FF', '#FFFFFF']}
-                style={styles.historyPanelGradient}
-              >
-                <View style={styles.historyHeader}>
-                  <View style={styles.historyTitleContainer}>
-                    {showHistoryPanel === 'Birthday' ? (
-                      <IconCommunity name="cake" size={20} color={COLORS.birthday} />
-                    ) : (
-                      <IconCommunity name="party-popper" size={20} color={COLORS.anniversary} />
-                    )}
-                    <Text style={styles.historyTitle}>
-                      {showHistoryPanel === 'Birthday' ? 'Birthday Wishes Sent' : 'Anniversary Wishes Sent'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setShowHistoryPanel(null)} style={styles.closeButton}>
-                    <Icon name="close" size={20} color={COLORS.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-                
-                <FlatList
-                  data={data.wishStats?.wishHistory?.filter(w => 
-                    w.eventType === (showHistoryPanel === 'Birthday' ? 'Birthday' : 'Work Anniversary')
-                  )}
-                  keyExtractor={(item, index) => item._id || index.toString()}
-                  renderItem={({ item: wish }) => (
-                    <View style={styles.historyItem}>
-                      <View style={styles.historyItemHeader}>
-                        <View style={styles.historySenderInfo}>
-                          <View style={styles.senderAvatar}>
-                            <Text style={styles.senderAvatarText}>
-                              {wish.senderName.charAt(0)}
-                            </Text>
-                          </View>
-                          <View>
-                            <Text style={styles.historySenderName}>{wish.senderName}</Text>
-                            <Text style={styles.historyDate}>
-                              {new Date(wish.date).toLocaleDateString()} • {new Date(wish.date).toLocaleTimeString()}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                      
-                      <View style={styles.wishBubble}>
-                        <Text style={styles.wishText}>"{wish.message}"</Text>
-                      </View>
-                      
-                      <Text style={styles.historyReceiver}>
-                        to <Text style={styles.receiverName}>{wish.receiverName}</Text>
-                      </Text>
-                      
-                      {wish.replyMessage && (
-                        <View style={styles.replyContainer}>
-                          <View style={styles.replyHeader}>
-                            <Icon name="reply" size={12} color={COLORS.info} />
-                            <Text style={styles.replyLabel}>Reply from {wish.receiverName}</Text>
-                          </View>
-                          <Text style={styles.replyText}>{wish.replyMessage}</Text>
-                          {wish.replyDate && (
-                            <Text style={styles.replyDate}>
-                              {new Date(wish.replyDate).toLocaleString()}
-                            </Text>
-                          )}
-                        </View>
-                      )}
-
-                      {!wish.replyMessage && wish.receiverEmployeeId === data.wishStats?.currentUserEmployeeId && (
-                        <View style={styles.replyAction}>
-                          {replyingToWish === wish._id ? (
-                            <View style={styles.replyInputContainer}>
-                              <TextInput
-                                style={styles.replyInput}
-                                value={replyText}
-                                onChangeText={setReplyText}
-                                placeholder="Type your reply..."
-                                multiline
-                                placeholderTextColor={COLORS.lightGray}
-                              />
-                              <View style={styles.replyButtons}>
-                                <TouchableOpacity
-                                  onPress={() => setReplyingToWish(null)}
-                                  style={styles.cancelButton}
-                                >
-                                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => submitReply(wish._id)}
-                                  style={styles.sendButton}
-                                >
-                                  <Text style={styles.sendButtonText}>Send</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          ) : (
-                            <TouchableOpacity
-                              onPress={() => setReplyingToWish(wish._id)}
-                              style={styles.replyButton}
-                            >
-                              <Icon name="reply" size={14} color={COLORS.info} />
-                              <Text style={styles.replyButtonText}>Reply</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  )}
-                  ListEmptyComponent={
-                    <View style={styles.emptyHistory}>
-                      <IconCommunity name="heart-outline" size={48} color={COLORS.lightGray} />
-                      <Text style={styles.emptyHistoryText}>No wishes sent yet</Text>
-                    </View>
-                  }
-                  showsVerticalScrollIndicator={false}
-                />
-              </LinearGradient>
+          {/* Month Selector */}
+          <View style={styles.monthSelector}>
+            <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton}>
+              <Icon name="chevron-left" size={28} color={COLORS.primary} />
+            </TouchableOpacity>
+            
+            <View style={styles.monthDisplay}>
+              <Text style={styles.monthText}>{MONTHS[currentDate.getMonth()]}</Text>
+              <Text style={styles.yearText}>{currentDate.getFullYear()}</Text>
             </View>
-          )}
+            
+            <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNavButton}>
+              <Icon name="chevron-right" size={28} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Today Button */}
+          <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
+            <Icon name="today" size={18} color={COLORS.white} />
+            <Text style={styles.todayButtonText}>Today</Text>
+          </TouchableOpacity>
 
           {/* Calendar Card */}
           <View style={styles.calendarCard}>
-            {/* Month Navigator */}
-            <View style={styles.monthNavigator}>
-              <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton}>
-                <Icon name="chevron-left" size={24} color={COLORS.primary} />
-              </TouchableOpacity>
-              
-              <View style={styles.monthDisplay}>
-                <Text style={styles.monthText}>
-                  {currentDate.toLocaleString('default', { month: 'long' })}
-                </Text>
-                <Text style={styles.yearText}>{currentDate.getFullYear()}</Text>
-              </View>
-              
-              <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNavButton}>
-                <Icon name="chevron-right" size={24} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Today Button */}
-            <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
-              <Icon name="today" size={16} color={COLORS.white} />
-              <Text style={styles.todayButtonText}>Today</Text>
-            </TouchableOpacity>
-
-            {/* Day Headers */}
+            {/* Day Headers - 7 days */}
             <View style={styles.dayHeaders}>
               {DAYS.map(day => (
-                <Text key={day.name} style={[styles.dayHeader, { color: day.color }]}>
-                  {day.name}
-                </Text>
+                <View key={day.name} style={styles.dayHeaderCell}>
+                  <Text style={[styles.dayHeaderText, { color: day.color }]}>
+                    {day.name}
+                  </Text>
+                </View>
               ))}
             </View>
 
-            {/* Calendar Grid */}
+            {/* Calendar Grid - 7 columns */}
             <View style={styles.calendarGrid}>
-              {days.map((date, idx) => {
-                if (!date) return <View key={`empty-${idx}`} style={styles.emptyDay} />;
+              {days.map((date, index) => {
+                if (!date) {
+                  return (
+                    <View key={`empty-${index}`} style={[styles.dayCell, styles.emptyDayCell]} />
+                  );
+                }
 
                 const events = getDayEvents(date);
                 const isToday = isSameDay(date, new Date());
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                const dayNumber = date.getDate();
 
                 return (
                   <TouchableOpacity
-                    key={date.toISOString()}
+                    key={`day-${index}`}
                     onPress={() => handleDayPress(date, events)}
                     style={[
                       styles.dayCell,
                       isToday && styles.todayCell,
+                      events.length > 0 && styles.dayCellWithEvents,
                     ]}
                     activeOpacity={0.7}
                   >
@@ -776,26 +694,22 @@ const UnifiedHubCalendarScreen = () => {
                       isToday && styles.todayNumber,
                       isWeekend && !isToday && styles.weekendNumber,
                     ]}>
-                      {date.getDate()}
+                      {dayNumber}
                     </Text>
                     
-                    {/* Event Indicators */}
-                    <View style={styles.eventIndicators}>
-                      {events.map((event, index) => (
-                        <View
-                          key={index}
-                          style={[
-                            styles.eventIndicator,
-                            { backgroundColor: event.color }
-                          ]}
-                        />
+                    {/* Event Icons */}
+                    <View style={styles.eventIcons}>
+                      {events.slice(0, 2).map((event, idx) => (
+                        <Text key={idx} style={styles.eventIcon}>
+                          {event.icon}
+                        </Text>
                       ))}
                     </View>
 
                     {/* Event Count Badge */}
-                    {events.length > 0 && (
-                      <View style={[styles.eventCountBadge, { backgroundColor: events[0].color }]}>
-                        <Text style={styles.eventCountText}>{events.length}</Text>
+                    {events.length > 2 && (
+                      <View style={styles.eventCountBadge}>
+                        <Text style={styles.eventCountText}>+{events.length - 2}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -816,7 +730,7 @@ const UnifiedHubCalendarScreen = () => {
                 }}
               >
                 <View style={[styles.legendIcon, { backgroundColor: COLORS.holiday }]}>
-                  <IconCommunity name="home" size={20} color={COLORS.white} />
+                  <Text style={styles.legendIconText}>🏖️</Text>
                 </View>
                 <View>
                   <Text style={styles.legendLabel}>Holidays</Text>
@@ -834,7 +748,7 @@ const UnifiedHubCalendarScreen = () => {
                 }}
               >
                 <View style={[styles.legendIcon, { backgroundColor: COLORS.leave }]}>
-                  <IconCommunity name="airplane-takeoff" size={20} color={COLORS.white} />
+                  <Text style={styles.legendIconText}>✈️</Text>
                 </View>
                 <View>
                   <Text style={styles.legendLabel}>My Leaves</Text>
@@ -852,7 +766,7 @@ const UnifiedHubCalendarScreen = () => {
                 }}
               >
                 <View style={[styles.legendIcon, { backgroundColor: COLORS.birthday }]}>
-                  <IconCommunity name="cake" size={20} color={COLORS.white} />
+                  <Text style={styles.legendIconText}>🎂</Text>
                 </View>
                 <View>
                   <Text style={styles.legendLabel}>Birthdays</Text>
@@ -870,7 +784,7 @@ const UnifiedHubCalendarScreen = () => {
                 }}
               >
                 <View style={[styles.legendIcon, { backgroundColor: COLORS.anniversary }]}>
-                  <IconCommunity name="party-popper" size={20} color={COLORS.white} />
+                  <Text style={styles.legendIconText}>🎉</Text>
                 </View>
                 <View>
                   <Text style={styles.legendLabel}>Anniversaries</Text>
@@ -892,7 +806,7 @@ const UnifiedHubCalendarScreen = () => {
               style={styles.quickStatCard}
             >
               <View style={[styles.quickStatIcon, { backgroundColor: '#FFE5E5' }]}>
-                <IconCommunity name="cake" size={24} color={COLORS.birthday} />
+                <Text style={styles.quickStatEmoji}>🎂</Text>
               </View>
               <View>
                 <Text style={styles.quickStatValue}>
@@ -910,7 +824,7 @@ const UnifiedHubCalendarScreen = () => {
               style={styles.quickStatCard}
             >
               <View style={[styles.quickStatIcon, { backgroundColor: '#E5FFF5' }]}>
-                <IconCommunity name="party-popper" size={24} color={COLORS.anniversary} />
+                <Text style={styles.quickStatEmoji}>🎉</Text>
               </View>
               <View>
                 <Text style={styles.quickStatValue}>
@@ -922,6 +836,127 @@ const UnifiedHubCalendarScreen = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* History Panel Modal */}
+      <Modal
+        visible={showHistoryPanel !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowHistoryPanel(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.historyModalContent}>
+            <View style={styles.historyModalHeader}>
+              <View style={styles.historyModalTitleContainer}>
+                {showHistoryPanel === 'Birthday' ? (
+                  <IconCommunity name="cake" size={24} color={COLORS.birthday} />
+                ) : (
+                  <IconCommunity name="party-popper" size={24} color={COLORS.anniversary} />
+                )}
+                <Text style={styles.historyModalTitle}>
+                  {showHistoryPanel === 'Birthday' ? 'Birthday Wishes Sent' : 'Anniversary Wishes Sent'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowHistoryPanel(null)} style={styles.modalCloseButton}>
+                <Icon name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={data.wishStats?.wishHistory?.filter(w => 
+                w.eventType === (showHistoryPanel === 'Birthday' ? 'Birthday' : 'Work Anniversary')
+              )}
+              keyExtractor={(item, index) => item._id || index.toString()}
+              contentContainerStyle={styles.historyList}
+              renderItem={({ item: wish }) => (
+                <View style={styles.historyItem}>
+                  <View style={styles.historyItemHeader}>
+                    <View style={styles.senderAvatar}>
+                      <Text style={styles.senderAvatarText}>
+                        {wish.senderName.charAt(0)}
+                      </Text>
+                    </View>
+                    <View style={styles.historyItemInfo}>
+                      <Text style={styles.senderName}>{wish.senderName}</Text>
+                      <Text style={styles.wishDate}>
+                        {new Date(wish.date).toLocaleDateString()} • {new Date(wish.date).toLocaleTimeString()}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.wishMessageContainer}>
+                    <Text style={styles.wishMessage}>"{wish.message}"</Text>
+                  </View>
+                  
+                  <Text style={styles.receiverInfo}>
+                    to <Text style={styles.receiverName}>{wish.receiverName}</Text>
+                  </Text>
+                  
+                  {wish.replyMessage && (
+                    <View style={styles.replyContainer}>
+                      <View style={styles.replyHeader}>
+                        <Icon name="reply" size={12} color={COLORS.info} />
+                        <Text style={styles.replyLabel}>Reply from {wish.receiverName}</Text>
+                      </View>
+                      <Text style={styles.replyText}>{wish.replyMessage}</Text>
+                      {wish.replyDate && (
+                        <Text style={styles.replyDate}>
+                          {new Date(wish.replyDate).toLocaleString()}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  {!wish.replyMessage && wish.receiverEmployeeId === data.wishStats?.currentUserEmployeeId && (
+                    <View style={styles.replyAction}>
+                      {replyingToWish === wish._id ? (
+                        <View style={styles.replyInputContainer}>
+                          <TextInput
+                            style={styles.replyInput}
+                            value={replyText}
+                            onChangeText={setReplyText}
+                            placeholder="Type your reply..."
+                            multiline
+                            placeholderTextColor={COLORS.lightGray}
+                          />
+                          <View style={styles.replyButtons}>
+                            <TouchableOpacity
+                              onPress={() => setReplyingToWish(null)}
+                              style={styles.cancelButton}
+                            >
+                              <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => submitReply(wish._id)}
+                              style={styles.sendButton}
+                            >
+                              <Text style={styles.sendButtonText}>Send</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => setReplyingToWish(wish._id)}
+                          style={styles.replyButton}
+                        >
+                          <Icon name="reply" size={14} color={COLORS.info} />
+                          <Text style={styles.replyButtonText}>Reply</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyHistory}>
+                  <IconCommunity name="heart-outline" size={48} color={COLORS.lightGray} />
+                  <Text style={styles.emptyHistoryText}>No wishes sent yet</Text>
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Day Details Modal */}
       <Modal
@@ -937,9 +972,9 @@ const UnifiedHubCalendarScreen = () => {
                 <Text style={styles.dayModalDate}>
                   {selectedDate && formatDate(selectedDate)}
                 </Text>
-                <Text style={styles.dayModalEventCount}>
-                  {dateEvents.length} {dateEvents.length === 1 ? 'Event' : 'Events'}
-                </Text>
+                <View style={styles.dayEventCountBadge}>
+                  <Text style={styles.dayEventCountText}>{dateEvents.length} Events</Text>
+                </View>
               </View>
               <TouchableOpacity onPress={() => setShowDateDetails(false)} style={styles.modalCloseButton}>
                 <Icon name="close" size={24} color={COLORS.textSecondary} />
@@ -948,13 +983,9 @@ const UnifiedHubCalendarScreen = () => {
 
             <ScrollView style={styles.dayModalBody}>
               {dateEvents.map((event, index) => (
-                <View key={index} style={[styles.dayEventItem, { borderLeftColor: event.color }]}>
+                <View key={index} style={[styles.dayEventItem, { backgroundColor: event.color + '15' }]}>
                   <View style={[styles.dayEventIcon, { backgroundColor: event.color }]}>
-                    {event.iconFamily === 'MaterialCommunityIcons' ? (
-                      <IconCommunity name={event.icon} size={20} color={COLORS.white} />
-                    ) : (
-                      <Icon name={event.icon} size={20} color={COLORS.white} />
-                    )}
+                    <Text style={styles.dayEventIconText}>{event.icon}</Text>
                   </View>
                   <View style={styles.dayEventInfo}>
                     <Text style={styles.dayEventTitle}>{event.title}</Text>
@@ -1020,12 +1051,13 @@ const UnifiedHubCalendarScreen = () => {
                       <Text style={styles.modalItemDay}>
                         {item.date ? item.date.getDate() : ''}
                       </Text>
+                      <Text style={styles.modalItemMonth}>
+                        {item.date ? item.date.toLocaleString('default', { month: 'short' }) : ''}
+                      </Text>
                     </View>
                     <View style={styles.modalItemInfo}>
                       <Text style={styles.modalItemName}>{item.name}</Text>
-                      <Text style={styles.modalItemDetail}>
-                        {item.date ? item.date.toLocaleString('default', { month: 'short' }) : ''} • {item.detail}
-                      </Text>
+                      <Text style={styles.modalItemDetail}>{item.detail}</Text>
                       {isCelebrationItem(item) && (item.division || item.location) && (
                         <View style={styles.modalItemTags}>
                           {item.division && (
@@ -1063,7 +1095,7 @@ const UnifiedHubCalendarScreen = () => {
                           styles.wishButtonText,
                           item.isWished && styles.wishedButtonText
                         ]}>
-                          {item.isWished ? 'Wished!' : 'Wish'}
+                          {item.isWished ? '✓ Wished' : 'Send Wish'}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1077,12 +1109,6 @@ const UnifiedHubCalendarScreen = () => {
                 </View>
               }
             />
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity onPress={() => setShowModal(false)} style={styles.modalButton}>
-                <Text style={styles.modalButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -1205,9 +1231,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginTop: 10,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 5,
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 20 : 10,
@@ -1216,10 +1239,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     elevation: 5,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
   },
   headerTop: {
     flexDirection: 'row',
@@ -1241,7 +1260,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.white,
-    letterSpacing: 0.5,
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerRight: {
     width: 40,
@@ -1263,10 +1291,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
   },
   statCardGradient: {
     padding: 16,
@@ -1291,92 +1315,300 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.9)',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  historyPanel: {
-    borderRadius: 24,
-    marginBottom: 20,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    maxHeight: 400,
-  },
-  historyPanelGradient: {
-    padding: 16,
-  },
-  historyHeader: {
+  monthSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  historyTitleContainer: {
-    flexDirection: 'row',
+  monthNavButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    elevation: 3,
   },
-  historyTitle: {
-    fontSize: 16,
+  monthDisplay: {
+    alignItems: 'center',
+  },
+  monthText: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
-  closeButton: {
-    padding: 4,
+  yearText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  historyItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+  todayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.info,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    alignSelf: 'center',
+    marginBottom: 20,
+    elevation: 3,
+  },
+  todayButtonText: {
+    fontSize: 14,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  calendarCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
     padding: 16,
+    marginBottom: 20,
+    elevation: 3,
+  },
+  dayHeaders: {
+    flexDirection: 'row',
     marginBottom: 12,
+  },
+  dayHeaderCell: {
+    width: DAY_CELL_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayHeaderText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: DAY_CELL_SIZE,
+    height: DAY_CELL_SIZE,
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderRadius: 12,
+    marginVertical: 1,
   },
-  historyItemHeader: {
-    marginBottom: 12,
+  emptyDayCell: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
-  historySenderInfo: {
+  todayCell: {
+    backgroundColor: COLORS.info,
+    borderColor: COLORS.info,
+  },
+  dayCellWithEvents: {
+    borderWidth: 2,
+    borderColor: COLORS.event,
+  },
+  dayNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  todayNumber: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  weekendNumber: {
+    color: COLORS.weekend,
+  },
+  eventIcons: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  eventIcon: {
+    fontSize: 10,
+  },
+  eventCountBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.event,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  eventCountText: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  legendCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 3,
+  },
+  legendTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+  },
+  legendGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  legendItem: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+  },
+  legendIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legendIconText: {
+    fontSize: 22,
+  },
+  legendLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  legendCount: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  quickStatsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    elevation: 2,
+  },
+  quickStatIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickStatEmoji: {
+    fontSize: 24,
+  },
+  quickStatValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  historyModalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    maxHeight: '80%',
+  },
+  historyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  historyModalTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  historyModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  historyList: {
+    padding: 20,
+  },
+  historyItem: {
+    backgroundColor: '#F8F9FF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  historyItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
   senderAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   senderAvatarText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.white,
   },
-  historySenderName: {
-    fontSize: 14,
+  historyItemInfo: {
+    flex: 1,
+  },
+  senderName: {
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
-  historyDate: {
-    fontSize: 10,
+  wishDate: {
+    fontSize: 11,
     color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  wishBubble: {
-    backgroundColor: '#F0F4FF',
+  wishMessageContainer: {
+    backgroundColor: COLORS.white,
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  wishText: {
-    fontSize: 13,
+  wishMessage: {
+    fontSize: 14,
     color: COLORS.textPrimary,
     fontStyle: 'italic',
   },
-  historyReceiver: {
-    fontSize: 12,
+  receiverInfo: {
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginBottom: 8,
   },
@@ -1385,12 +1617,10 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   replyContainer: {
-    backgroundColor: '#F8F9FF',
+    backgroundColor: '#EFF6FF',
     borderRadius: 12,
     padding: 12,
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   replyHeader: {
     flexDirection: 'row',
@@ -1399,35 +1629,35 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   replyLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.info,
     textTransform: 'uppercase',
   },
   replyText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textPrimary,
     marginBottom: 4,
   },
   replyDate: {
-    fontSize: 9,
+    fontSize: 10,
     color: COLORS.textSecondary,
   },
   replyAction: {
-    marginTop: 8,
+    marginTop: 12,
   },
   replyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: '#EFF6FF',
-    borderRadius: 16,
+    borderRadius: 20,
   },
   replyButtonText: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.info,
     fontWeight: '600',
   },
@@ -1442,7 +1672,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     backgroundColor: COLORS.white,
     marginBottom: 8,
-    minHeight: 60,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   replyButtons: {
@@ -1474,225 +1704,12 @@ const styles = StyleSheet.create({
   },
   emptyHistory: {
     alignItems: 'center',
-    padding: 32,
+    padding: 40,
   },
   emptyHistoryText: {
+    fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 8,
-  },
-  calendarCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  monthNavigator: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  monthNavButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F4FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  monthDisplay: {
-    alignItems: 'center',
-  },
-  monthText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-  },
-  yearText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  todayButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.info,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 25,
-    alignSelf: 'center',
-    marginBottom: 20,
-    elevation: 2,
-  },
-  todayButtonText: {
-    fontSize: 14,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  dayHeaders: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  dayHeader: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  emptyDay: {
-    width: (width - 72) / 7,
-    height: (width - 72) / 7,
-    margin: 2,
-  },
-  dayCell: {
-    width: (width - 72) / 7,
-    height: (width - 72) / 7,
-    margin: 2,
-    borderRadius: 16,
-    padding: 4,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    justifyContent: 'space-between',
-  },
-  todayCell: {
-    backgroundColor: COLORS.info,
-    borderColor: COLORS.info,
-  },
-  dayNumber: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.textPrimary,
-  },
-  todayNumber: {
-    color: COLORS.white,
-    fontWeight: 'bold',
-  },
-  weekendNumber: {
-    color: COLORS.error,
-  },
-  eventIndicators: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
-    marginTop: 2,
-  },
-  eventIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  eventCountBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  eventCountText: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: COLORS.white,
-  },
-  legendCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  legendTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 16,
-  },
-  legendGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  legendItem: {
-    width: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 16,
-  },
-  legendIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  legendLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  legendCount: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  quickStatsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickStatCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  quickStatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickStatValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-  },
-  quickStatLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
   },
   dayModalContent: {
     backgroundColor: COLORS.white,
@@ -1713,58 +1730,60 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
-  dayModalEventCount: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
+  dayEventCountBadge: {
     marginTop: 4,
+  },
+  dayEventCountText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
   dayModalBody: {
     padding: 20,
-    maxHeight: 400,
   },
   dayEventItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     padding: 16,
-    backgroundColor: '#F8F9FF',
     borderRadius: 16,
     marginBottom: 12,
-    borderLeftWidth: 4,
   },
   dayEventIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  dayEventIconText: {
+    fontSize: 24,
   },
   dayEventInfo: {
     flex: 1,
   },
   dayEventTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
   dayEventType: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
   dayEventWishButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     backgroundColor: COLORS.birthday,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
     alignSelf: 'flex-start',
     marginTop: 8,
   },
   dayEventWishText: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.white,
     fontWeight: '600',
   },
@@ -1783,7 +1802,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.white,
   },
@@ -1808,34 +1827,39 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalItemDate: {
-    width: 44,
-    height: 44,
+    width: 50,
+    height: 50,
     borderRadius: 12,
     backgroundColor: COLORS.info,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalItemDay: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.white,
+  },
+  modalItemMonth: {
+    fontSize: 10,
+    color: COLORS.white,
+    marginTop: -2,
   },
   modalItemInfo: {
     flex: 1,
   },
   modalItemName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
   modalItemDetail: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
   modalItemTags: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
     marginTop: 4,
   },
   tag: {
@@ -1848,7 +1872,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   tagText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '600',
     color: COLORS.info,
   },
@@ -1857,15 +1881,15 @@ const styles = StyleSheet.create({
   },
   wishButton: {
     backgroundColor: COLORS.birthday,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
   },
   wishedButton: {
     backgroundColor: '#D1FAE5',
   },
   wishButtonText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.white,
   },
@@ -1874,27 +1898,12 @@ const styles = StyleSheet.create({
   },
   noEvents: {
     alignItems: 'center',
-    padding: 32,
+    padding: 40,
   },
   noEventsText: {
+    fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 8,
-  },
-  modalFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  modalButton: {
-    backgroundColor: COLORS.info,
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: COLORS.white,
-    fontWeight: '600',
-    fontSize: 16,
   },
   wishModalContent: {
     backgroundColor: COLORS.white,
@@ -1909,7 +1918,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   wishModalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
@@ -1940,21 +1949,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   wishEmployeeName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
   wishEmployeeDesignation: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
   wishInput: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
-    fontSize: 14,
+    fontSize: 15,
     minHeight: 120,
     backgroundColor: '#F8F9FF',
     color: COLORS.textPrimary,
@@ -1971,7 +1980,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wishCancelButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
@@ -1986,7 +1995,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
   },
   wishSendButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.white,
   },
