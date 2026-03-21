@@ -24,6 +24,7 @@ import { useNavigation } from '@react-navigation/native';
 import { leaveAPI, celebrationAPI } from '../services/api';
 import LinearGradient from 'react-native-linear-gradient';
 import Confetti from 'react-native-confetti';
+import { useSidebar } from '../context/SidebarContext';
 
 const { width } = Dimensions.get('window');
 
@@ -158,6 +159,7 @@ type FilteredListItem = HolidayItem | LeaveItem | CelebrationItem;
 
 const UnifiedHubCalendarScreen = () => {
   const navigation = useNavigation();
+  const { toggleSidebar } = useSidebar();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -559,6 +561,9 @@ const UnifiedHubCalendarScreen = () => {
         style={styles.header}
       >
         <View style={styles.headerTop}>
+          <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+            <Icon name="menu" size={28} color={COLORS.white} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Icon name="arrow-back-ios" size={20} color={COLORS.white} />
           </TouchableOpacity>
@@ -1246,6 +1251,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',

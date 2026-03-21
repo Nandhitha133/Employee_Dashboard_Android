@@ -59,6 +59,9 @@ import UnifiedHubCalendarScreen from './src/screens/UnifiedHubCalendarScreen';
 import ResumeRepositoryScreen from './src/screens/ResumeRepositoryScreen';
 
 
+import { SidebarProvider } from './src/context/SidebarContext';
+import GlobalSidebar from './src/components/GlobalSidebar';
+
 // Define Root Stack Param List
 export type RootStackParamList = {
   // Auth
@@ -140,12 +143,14 @@ const App = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <SidebarProvider>
         <StatusBar 
           barStyle="light-content" 
           backgroundColor="#1E3A8A"
           translucent={true}
         />
         <NavigationContainer>
+          <GlobalSidebar />
           <Stack.Navigator 
             initialRouteName="Login"
             screenOptions={{
@@ -216,6 +221,7 @@ const App = () => {
             
           </Stack.Navigator>
         </NavigationContainer>
+        </SidebarProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

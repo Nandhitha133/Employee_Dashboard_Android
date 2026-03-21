@@ -10,15 +10,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import { useSidebar } from '../context/SidebarContext';
 
-const { width } = Dimensions.get('window');
-
-// Update COLORS to match exactly with ExpenditureManagementScreen
 const COLORS = {
-  primary: '#0A0F2C', // This matches your expenditure screen
+  primary: '#0A0F2C',
+  secondary: '#1A237E',
   white: '#FFFFFF',
-  gray: '#666666',
-  textPrimary: '#2C3E50', // Optional: if you need this
+  gray: '#6B7280',
+  lightGray: '#E5E7EB',
 };
 
 interface CommonHeaderProps {
@@ -37,7 +36,7 @@ interface CommonHeaderProps {
 const CommonHeader: React.FC<CommonHeaderProps> = ({
   title,
   showBack = false,
-  showMenu = false,
+  showMenu = true, // Default to true as per user request
   onMenuPress,
   onBack,
   rightComponent,
@@ -47,12 +46,21 @@ const CommonHeader: React.FC<CommonHeaderProps> = ({
   userName,
 }) => {
   const navigation = useNavigation();
+  const { toggleSidebar } = useSidebar();
 
   const handleBack = () => {
     if (onBack) {
       onBack();
     } else {
       navigation.goBack();
+    }
+  };
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else {
+      toggleSidebar();
     }
   };
 
@@ -63,12 +71,12 @@ const CommonHeader: React.FC<CommonHeaderProps> = ({
       <View style={styles.headerTop}>
         <View style={styles.headerLeft}>
           {showMenu && (
-            <TouchableOpacity onPress={onMenuPress} style={styles.menuButton}>
+            <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
               <Icon name="menu" size={28} color={COLORS.white} />
             </TouchableOpacity>
           )}
           
-          {showBack && !showMenu && (
+          {showBack && (
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Icon name="arrow-back" size={24} color={COLORS.white} />
             </TouchableOpacity>

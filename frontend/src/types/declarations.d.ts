@@ -40,11 +40,12 @@ declare module '@react-native-picker/picker' {
     style?: any;
     itemStyle?: any;
     dropdownIconColor?: string;
+    dropdownIconRippleColor?: string;
     children?: React.ReactNode;
   }
 
   export class Picker extends Component<PickerProps> {
-    static Item: ComponentType<{ label: string; value: any; color?: string }>;
+    static Item: ComponentType<{ label: string; value: any; color?: string; style?: any }>;
   }
 }
 

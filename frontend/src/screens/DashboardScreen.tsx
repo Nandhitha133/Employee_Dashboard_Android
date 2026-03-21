@@ -22,6 +22,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CommonFooter from '../components/CommonFooter';
+import { useSidebar } from '../context/SidebarContext';
 
 const { width } = Dimensions.get('window');
 
@@ -152,13 +153,11 @@ const DashboardScreen = () => {
   const [greeting, setGreeting] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState({});
-  const [expandedDropdowns, setExpandedDropdowns] = useState({});
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<User | null>(null);
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const slideAnim = useState(new Animated.Value(-width))[0];
+  const { isSidebarOpen: sidebarVisible, toggleSidebar } = useSidebar();
   
   // Get user from route params
   const user: User | undefined = routeParams?.user;
@@ -938,29 +937,6 @@ const DashboardScreen = () => {
     }, {});
   }, [getVisibleModules]);
 
-  // Get sidebar modules with folder structure in exact order
-  const getSidebarModules = () => {
-    // Sort modules by order property
-    const sortedModules = [...filteredModules].sort((a, b) => (a.order || 999) - (b.order || 999));
-    
-    const mainModules = sortedModules.filter(m => m.category === 'Main');
-    const folderModules = sortedModules.filter(m => m.hasDropdown === true);
-    const individualModules = sortedModules.filter(
-      m => m.category !== 'Main' && m.category !== 'Notifications' && !m.hasDropdown
-    );
-    const notificationModules = sortedModules.filter(m => m.category === 'Notifications');
-    
-    return { mainModules, folderModules, individualModules, notificationModules };
-  };
-
-  // Toggle dropdown expansion
-  const toggleDropdown = (folderName: string) => {
-    setExpandedDropdowns((prev: any) => ({
-      ...prev,
-      [folderName]: !prev[folderName]
-    }));
-  };
-
   // Toggle category
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev: any) => ({
@@ -971,12 +947,10 @@ const DashboardScreen = () => {
 
   // Handle module press
   const handleModulePress = (module: Module) => {
-    setSidebarVisible(false);
-    
     if (module.screen === 'MyProfile') {
       navigation.navigate('MyProfile', { user: profile || user as User });
-    } else if (module.screen === 'Home') {
-      // Already on home, just close sidebar
+    } else if (module.screen === 'Home' || module.screen === 'Dashboard') {
+      // Already on home
     } else if (module.hasDropdown && module.children && module.children.length > 0) {
       // For folders, navigate to the first child screen
       const firstChild = module.children[0];
@@ -988,7 +962,6 @@ const DashboardScreen = () => {
 
   // Handle logout
   const handleLogout = () => {
-    setSidebarVisible(false);
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -997,24 +970,6 @@ const DashboardScreen = () => {
         { text: 'Logout', onPress: () => navigation.replace('Login') }
       ]
     );
-  };
-
-  // Toggle sidebar
-  const toggleSidebar = () => {
-    if (sidebarVisible) {
-      Animated.timing(slideAnim, {
-        toValue: -width,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => setSidebarVisible(false));
-    } else {
-      setSidebarVisible(true);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
   };
 
   // Category Card Component
@@ -1082,118 +1037,6 @@ const DashboardScreen = () => {
           )}
         </View>
       </View>
-    );
-  };
-
-  // Sidebar Component with exact order
-  const Sidebar = () => {
-    const { mainModules, folderModules, individualModules, notificationModules } = getSidebarModules();
-    
-    const renderChildren = (parent: Module) => {
-      const filteredChildren = filterChildren(parent.children);
-      if (!(expandedDropdowns as any)[parent.name] || filteredChildren.length === 0) return null;
-      
-      return filteredChildren.map((child, index) => (
-        <TouchableOpacity
-          key={index}
-          onPress={() => handleModulePress(child)}
-          style={styles.sidebarSubMenuItem}
-        >
-          <View style={styles.sidebarSubMenuIcon}>
-            {child.iconFamily === 'MaterialCommunityIcons' ? (
-              <IconCommunity name={child.icon} size={18} color="rgba(255,255,255,0.7)" />
-            ) : (
-              <Icon name={child.icon} size={18} color="rgba(255,255,255,0.7)" />
-            )}
-          </View>
-          <Text style={styles.sidebarSubMenuText}>{child.name}</Text>
-          {child.badge && (
-            <View style={styles.sidebarBadge}>
-              <Text style={styles.sidebarBadgeText}>{child.badge}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      ));
-    };
-
-    // Combine in exact order: Main -> Timesheet (folder) -> Employee Attendance -> Attendance Approval -> Admin Timesheet (folder) -> Project Allocation -> Performance Management (folder) -> Leave Management (folder) -> Leave Applications -> Insurance -> Policy Portal -> Salary Slips -> Payroll Management (folder) -> Expenditure Management -> Announcements -> Internships -> Resume Repository -> Employee Exit Form -> Exit Management (folder) -> Employee Reward Tracker -> Holiday Allowance -> Employee Management -> User Access -> Team Management -> Edit In and Out Time -> Unified Hub Calendar -> Notifications
-    const allModulesInOrder = [...mainModules, ...folderModules, ...individualModules, ...notificationModules];
-
-    return (
-      <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
-        <View style={styles.sidebarHeader}>
-          <Image
-            source={require('../assets/images/steel-logo.png')}
-            style={styles.sidebarLogo}
-            resizeMode="contain"
-          />
-          <TouchableOpacity onPress={toggleSidebar} style={styles.sidebarCloseButton}>
-            <Text style={{ fontSize: 20, color: COLORS.white }}>✕</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
-          {allModulesInOrder.map((module, index) => {
-            if (module.hasDropdown) {
-              const filteredChildren = filterChildren(module.children);
-              if (filteredChildren.length === 0) return null;
-              
-              return (
-                <View key={module.name}>
-                  <TouchableOpacity
-                    onPress={() => toggleDropdown(module.name)}
-                    style={styles.sidebarMenuItem}
-                  >
-                    <View style={styles.sidebarMenuIcon}>
-                      {module.iconFamily === 'MaterialCommunityIcons' ? (
-                        <IconCommunity name={module.icon} size={20} color={COLORS.white} />
-                      ) : (
-                        <Icon name={module.icon} size={20} color={COLORS.white} />
-                      )}
-                    </View>
-                    <Text style={styles.sidebarMenuText}>{module.name}</Text>
-                    <Icon 
-                      name={(expandedDropdowns as any)[module.name] ? "expand-less" : "expand-more"} 
-                      size={20} 
-                      color={COLORS.white} 
-                    />
-                  </TouchableOpacity>
-                  {renderChildren(module)}
-                </View>
-              );
-            } else {
-              return (
-                <TouchableOpacity
-                  key={module.name}
-                  onPress={() => handleModulePress(module)}
-                  style={styles.sidebarMenuItem}
-                >
-                  <View style={styles.sidebarMenuIcon}>
-                    {module.iconFamily === 'MaterialCommunityIcons' ? (
-                      <IconCommunity name={module.icon} size={20} color={COLORS.white} />
-                    ) : (
-                      <Icon name={module.icon} size={20} color={COLORS.white} />
-                    )}
-                  </View>
-                  <Text style={styles.sidebarMenuText}>{module.name}</Text>
-                  {module.badge && (
-                    <View style={styles.sidebarBadge}>
-                      <Text style={styles.sidebarBadgeText}>{module.badge}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            }
-          })}
-
-          {allModulesInOrder.length === 0 && (
-            <View style={styles.sidebarEmptyContainer}>
-              <Text style={styles.sidebarEmptyText}>No menu items available</Text>
-              <Text style={styles.sidebarEmptySubText}>Check your permissions</Text>
-            </View>
-          )}
-        </ScrollView>
-      </Animated.View>
     );
   };
 
@@ -1323,17 +1166,6 @@ const DashboardScreen = () => {
         companyName="CALDIM ENGINEERING PVT LTD"
         marqueeText="Dashboard • Employee Portal • "
       />
-
-      {/* Sidebar Overlay */}
-      {sidebarVisible && (
-        <TouchableOpacity 
-          style={styles.sidebarOverlay} 
-          activeOpacity={1} 
-          onPress={toggleSidebar}
-        >
-          <Sidebar />
-        </TouchableOpacity>
-      )}
 
       {/* Profile Modal */}
       <Modal
@@ -1673,7 +1505,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    width: width * 0.55,
+    width: width * 0.40,
     backgroundColor: COLORS.primary,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
@@ -1694,7 +1526,7 @@ const styles = StyleSheet.create({
   },
   sidebarLogo: {
     width: 120,
-    height: 80,
+    height: 120,
   },
   sidebarCloseButton: {
     padding: 4,
