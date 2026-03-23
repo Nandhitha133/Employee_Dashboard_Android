@@ -36,6 +36,10 @@ export interface Employee {
   location?: string;
   employeeId?: string;
   designation?: string;
+  division?: string;
+  appraiser?: string;
+  reviewer?: string;
+  director?: string;
 }
 
 export interface Announcement {

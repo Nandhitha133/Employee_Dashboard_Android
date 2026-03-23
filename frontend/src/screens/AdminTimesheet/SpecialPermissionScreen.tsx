@@ -113,18 +113,10 @@ const SpecialPermissionScreen = () => {
       
       console.log('Fetching special permissions with params:', params);
       
-      // Use the same method as web - list or getAll
-      let response;
-      try {
-        // Try using getAll first
-        response = await specialPermissionAPI.getAll(params);
-      } catch (err: any) {
-        console.log('getAll failed, trying list...');
-        // Fallback to list if getAll doesn't exist
-        response = await specialPermissionAPI.list(params);
-      }
+      // Use getAll method only (list doesn't exist)
+      const response = await specialPermissionAPI.getAll(params);
       
-      console.log('API Response:', response.data);
+      console.log('API Response:', JSON.stringify(response.data, null, 2));
       
       // Extract data from response - handle multiple possible structures
       let data: SpecialPermission[] = [];
@@ -141,14 +133,20 @@ const SpecialPermissionScreen = () => {
       } else if (response.data?.results && Array.isArray(response.data.results)) {
         data = response.data.results;
         setDebugInfo(`Found ${data.length} records in response.data.results`);
+      } else if (response.data?.items && Array.isArray(response.data.items)) {
+        data = response.data.items;
+        setDebugInfo(`Found ${data.length} records in response.data.items`);
       } else {
-        setDebugInfo('No data found in response');
+        setDebugInfo('No data found in response structure');
+        console.log('Response structure:', Object.keys(response.data || {}));
       }
       
       setItems(data);
       
       if (data.length === 0) {
         console.log('No records found for status filter:', statusFilter);
+      } else {
+        console.log('Sample item:', data[0]);
       }
       
     } catch (error: any) {
@@ -375,11 +373,12 @@ const SpecialPermissionScreen = () => {
                   dropdownIconColor={COLORS.primary}
                   mode="dropdown"
                 >
-                  {locations.map(l => (
+                  <Picker.Item label="All Locations" value="All" color={COLORS.dropdownText} />
+                  {locations.filter(l => l !== 'All').map(loc => (
                     <Picker.Item 
-                      key={l} 
-                      label={l === 'All' ? 'All Locations' : l} 
-                      value={l} 
+                      key={loc} 
+                      label={loc} 
+                      value={loc} 
                       color={COLORS.dropdownText} 
                     />
                   ))}
@@ -397,11 +396,12 @@ const SpecialPermissionScreen = () => {
                   dropdownIconColor={COLORS.primary}
                   mode="dropdown"
                 >
-                  {divisions.map(d => (
+                  <Picker.Item label="All Divisions" value="All" color={COLORS.dropdownText} />
+                  {divisions.filter(d => d !== 'All').map(div => (
                     <Picker.Item 
-                      key={d} 
-                      label={d === 'All' ? 'All Divisions' : d} 
-                      value={d} 
+                      key={div} 
+                      label={div} 
+                      value={div} 
                       color={COLORS.dropdownText} 
                     />
                   ))}

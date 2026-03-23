@@ -41,6 +41,16 @@ import EmployeeManagementScreen from '../screens/EmployeeManagementScreen';
 import UserAccessScreen from '../screens/UserAccessScreen';
 import TeamManagementScreen from '../screens/TeamManagementScreen';
 import ExpenditureManagementScreen from '../screens/ExpenditureManagement/ExpenditureManagementScreen';
+import RegionalHolidayScreen from '../screens/LeaveApplications/RegionalHolidayScreen';
+import MarriageAllowanceScreen from '../screens/Payroll/MarriageAllowanceScreen';
+import AppraisalMasterScreen from '../screens/Performance/AppraisalMasterScreen';
+import AppraisalWorkflowScreen from '../screens/Performance/AppraisalWorkflowScreen';
+import AttendanceSummaryScreen from '../screens/Performance/AttendanceSummaryScreen';
+import IncrementSummaryScreen from '../screens/Performance/IncrementSummaryScreen';
+import ResumeRepositoryScreen from '../screens/ResumeRepositoryScreen';
+import UnifiedHubCalendarScreen from '../screens/UnifiedHubCalendarScreen';
+import EditInOutTimeScreen from '../screens/AdminTimesheet/EditInOutTimeScreen';
+import SpecialPermissionScreen from '../screens/AdminTimesheet/SpecialPermissionScreen';
 // Define user type
 export interface User {
   name: string;
@@ -93,6 +103,16 @@ export type RootStackParamList = {
   TeamManagement: undefined;
   Expenditure: undefined;
   CTC: undefined;
+  RegionalHoliday: undefined;
+  MarriageAllowance: undefined;
+  AppraisalMaster: undefined;
+  AppraisalWorkflow: undefined;
+  AttendanceSummary: undefined;
+  IncrementSummary: undefined;
+  ResumeRepository: undefined;
+  UnifiedHubCalendar: undefined;
+  EditInOutTime: undefined;
+  SpecialPermission: undefined;
   [key: string]: undefined | object;
 };
 
@@ -147,6 +167,16 @@ const AppNavigator = () => {
         <Stack.Screen name="EmployeeManagement" component={EmployeeManagementScreen} />
         <Stack.Screen name="UserAccess" component={UserAccessScreen} />
         <Stack.Screen name="TeamManagement" component={TeamManagementScreen} />
+        <Stack.Screen name="RegionalHoliday" component={RegionalHolidayScreen} />
+        <Stack.Screen name="MarriageAllowance" component={MarriageAllowanceScreen} />
+        <Stack.Screen name="AppraisalMaster" component={AppraisalMasterScreen} />
+        <Stack.Screen name="AppraisalWorkflow" component={AppraisalWorkflowScreen} />
+        <Stack.Screen name="AttendanceSummary" component={AttendanceSummaryScreen} />
+        <Stack.Screen name="IncrementSummary" component={IncrementSummaryScreen} />
+        <Stack.Screen name="ResumeRepository" component={ResumeRepositoryScreen} />
+        <Stack.Screen name="UnifiedHubCalendar" component={UnifiedHubCalendarScreen} />
+        <Stack.Screen name="EditInOutTime" component={EditInOutTimeScreen} />
+        <Stack.Screen name="SpecialPermission" component={SpecialPermissionScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

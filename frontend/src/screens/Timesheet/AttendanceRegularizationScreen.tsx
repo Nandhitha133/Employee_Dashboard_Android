@@ -44,7 +44,7 @@ const COLORS = {
   filterBg: '#F8FAFC',
   holidayBg: '#E8F5E9',
   gridBorder: '#D1D5DB',
-  headerBg: '#1E3A8A',
+  headerBg: '#0A0F2C',
   alternateRow: '#F9FAFB'
 };
 

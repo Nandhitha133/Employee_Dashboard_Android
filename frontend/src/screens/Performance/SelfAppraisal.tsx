@@ -1,4 +1,4 @@
-// src/screens/Performance/SelfAppraisal.tsx
+// screens/Performance/SelfAppraisal.tsx
 import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
@@ -14,11 +14,13 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CommonHeader from '../../components/CommonHeader';
+import CommonFooter from '../../components/CommonFooter';
 import WorkflowTracker from '../../components/Performance/WorkflowTracker';
 import { performanceAPI } from '../../services/api';
 import { APPRAISAL_STAGES, getWorkflowForUser } from '../../utils/performanceUtils';
@@ -132,7 +134,6 @@ const SelfAppraisal = () => {
     if (user.department && user.designation) {
       const workflow = getWorkflowForUser(user.department, user.designation);
       setUserWorkflow(workflow);
-      console.log('User workflow:', workflow);
     }
   }, [user.department, user.designation]);
 
@@ -222,7 +223,6 @@ const SelfAppraisal = () => {
   const handleEditAppraisal = async (appraisal: Appraisal) => {
     try {
       setLoading(true);
-      // Convert number id to string for API call
       const id = String(appraisal.id);
       const response = await performanceAPI.getSelfAppraisalById(id);
       setFormData(response.data);
@@ -246,7 +246,6 @@ const SelfAppraisal = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Convert number id to string for API call
               await performanceAPI.deleteSelfAppraisal(String(id));
               fetchAppraisals();
               Alert.alert('Success', 'Appraisal deleted successfully');
@@ -290,7 +289,6 @@ const SelfAppraisal = () => {
     }
 
     if (isEditingProject && editingIndex !== null) {
-      // Update existing project
       const updatedProjects = [...formData.projects];
       updatedProjects[editingIndex] = {
         name: currentProject.name,
@@ -298,7 +296,6 @@ const SelfAppraisal = () => {
       };
       setFormData({ ...formData, projects: updatedProjects });
     } else {
-      // Add new project
       setFormData({
         ...formData,
         projects: [...formData.projects, { name: currentProject.name, contribution: currentProject.contribution }]
@@ -346,15 +343,13 @@ const SelfAppraisal = () => {
         employeeName: user.name,
         designation: user.designation,
         department: user.department,
-        workflow: userWorkflow, // Include workflow configuration
+        workflow: userWorkflow,
       };
 
-      let response;
       if (formData.id) {
-        // Convert number id to string for API call
-        response = await performanceAPI.updateSelfAppraisal(String(formData.id), payload);
+        await performanceAPI.updateSelfAppraisal(String(formData.id), payload);
       } else {
-        response = await performanceAPI.createSelfAppraisal(payload);
+        await performanceAPI.createSelfAppraisal(payload);
       }
 
       Alert.alert(
@@ -395,14 +390,14 @@ const SelfAppraisal = () => {
 
   // Render List View
   const renderListView = () => (
-    <View style={styles.container}>
+    <>
       <CommonHeader 
         title="Self Appraisal"
         showBack={true}
         onBack={handleBack}
         rightComponent={
           <TouchableOpacity onPress={handleNewAppraisal} style={styles.newButton}>
-            <Icon name="add" size={24} color={COLORS.white} />
+            <Icon name="add" size={20} color={COLORS.white} />
             <Text style={styles.newButtonText}>New</Text>
           </TouchableOpacity>
         }
@@ -453,7 +448,7 @@ const SelfAppraisal = () => {
                     style={styles.actionButton}
                     onPress={() => handleEditAppraisal(item)}
                   >
-                    <Icon name="edit" size={20} color={COLORS.primary} />
+                    <Icon name="edit" size={18} color={COLORS.primary} />
                     <Text style={styles.actionText}>Edit</Text>
                   </TouchableOpacity>
 
@@ -461,7 +456,7 @@ const SelfAppraisal = () => {
                     style={styles.actionButton}
                     onPress={() => Alert.alert('Info', 'View details coming soon')}
                   >
-                    <Icon name="visibility" size={20} color={COLORS.info} />
+                    <Icon name="visibility" size={18} color={COLORS.info} />
                     <Text style={styles.actionText}>View</Text>
                   </TouchableOpacity>
 
@@ -470,7 +465,7 @@ const SelfAppraisal = () => {
                       style={styles.actionButton}
                       onPress={() => handleDownloadLetter(item.releaseLetter)}
                     >
-                      <Icon name="download" size={20} color={COLORS.success} />
+                      <Icon name="download" size={18} color={COLORS.success} />
                       <Text style={styles.actionText}>Download</Text>
                     </TouchableOpacity>
                   )}
@@ -479,7 +474,7 @@ const SelfAppraisal = () => {
                     style={styles.actionButton}
                     onPress={() => handleDeleteAppraisal(item.id!)}
                   >
-                    <Icon name="delete" size={20} color={COLORS.error} />
+                    <Icon name="delete" size={18} color={COLORS.error} />
                     <Text style={styles.actionText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
@@ -494,12 +489,17 @@ const SelfAppraisal = () => {
           </View>
         )}
       </ScrollView>
-    </View>
+
+      <CommonFooter 
+        companyName="CALDIM ENGINEERING PVT LTD"
+        marqueeText="Performance Management • Self Appraisal • "
+      />
+    </>
   );
 
   // Render Edit View
   const renderEditView = () => (
-    <View style={styles.container}>
+    <>
       <CommonHeader 
         title="Self Appraisal"
         showBack={true}
@@ -511,12 +511,12 @@ const SelfAppraisal = () => {
         style={styles.editContainer}
       >
         <ScrollView style={styles.editContent} showsVerticalScrollIndicator={false}>
-          {/* Workflow Tracker - Now passing stages correctly */}
+          {/* Workflow Tracker */}
           <View style={styles.section}>
             <WorkflowTracker 
-             currentStageId="appraisee" 
-              userFlow={APPRAISAL_STAGES}  // Pass stages directly as userFlow
-              />
+              currentStageId="appraisee" 
+              userFlow={APPRAISAL_STAGES}
+            />
           </View>
 
           {/* Financial Year Selector */}
@@ -543,7 +543,7 @@ const SelfAppraisal = () => {
             </View>
           </View>
 
-          {/* Workflow Info Section (if available) */}
+          {/* Workflow Info Section */}
           {userWorkflow && (
             <View style={styles.workflowInfo}>
               <Text style={styles.workflowTitle}>Your Appraisal Workflow</Text>
@@ -569,7 +569,7 @@ const SelfAppraisal = () => {
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Key Projects</Text>
               <TouchableOpacity onPress={openAddProjectModal} style={styles.addButton}>
-                <Icon name="add" size={20} color={COLORS.white} />
+                <Icon name="add" size={18} color={COLORS.white} />
                 <Text style={styles.addButtonText}>Add Project</Text>
               </TouchableOpacity>
             </View>
@@ -590,13 +590,13 @@ const SelfAppraisal = () => {
                         onPress={() => openEditProjectModal(project, index)}
                         style={styles.projectActionButton}
                       >
-                        <Icon name="edit" size={18} color={COLORS.primary} />
+                        <Icon name="edit" size={16} color={COLORS.primary} />
                       </TouchableOpacity>
                       <TouchableOpacity 
                         onPress={() => removeProject(index)}
                         style={styles.projectActionButton}
                       >
-                        <Icon name="delete" size={18} color={COLORS.error} />
+                        <Icon name="delete" size={16} color={COLORS.error} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -618,7 +618,7 @@ const SelfAppraisal = () => {
               >
                 <Icon 
                   name={formData.overallContribution ? "edit" : "add"} 
-                  size={20} 
+                  size={18} 
                   color={COLORS.primary} 
                 />
                 <Text style={styles.editContributionText}>
@@ -650,7 +650,7 @@ const SelfAppraisal = () => {
                 <ActivityIndicator color={COLORS.white} size="small" />
               ) : (
                 <>
-                  <Icon name="save" size={20} color={COLORS.white} />
+                  <Icon name="save" size={18} color={COLORS.white} />
                   <Text style={styles.buttonText}>Save Draft</Text>
                 </>
               )}
@@ -665,7 +665,7 @@ const SelfAppraisal = () => {
                 <ActivityIndicator color={COLORS.white} size="small" />
               ) : (
                 <>
-                  <Icon name="send" size={20} color={COLORS.white} />
+                  <Icon name="send" size={18} color={COLORS.white} />
                   <Text style={styles.buttonText}>Submit</Text>
                 </>
               )}
@@ -674,130 +674,20 @@ const SelfAppraisal = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Project Modal */}
-      <Modal
-        visible={showProjectModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowProjectModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isEditingProject ? 'Edit Project' : 'Add Project'}
-              </Text>
-              <TouchableOpacity onPress={() => setShowProjectModal(false)}>
-                <Icon name="close" size={24} color={COLORS.gray} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Project Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter project name"
-                  placeholderTextColor={COLORS.lightGray}
-                  value={currentProject.name}
-                  onChangeText={(text) => setCurrentProject({ ...currentProject, name: text })}
-                  maxLength={100}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Your Contribution</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Describe your contribution..."
-                  placeholderTextColor={COLORS.lightGray}
-                  value={currentProject.contribution}
-                  onChangeText={(text) => setCurrentProject({ ...currentProject, contribution: text })}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  maxLength={500}
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowProjectModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveButton}
-                onPress={saveProject}
-              >
-                <Text style={styles.modalSaveText}>
-                  {isEditingProject ? 'Update' : 'Add'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Contribution Modal */}
-      <Modal
-        visible={showContributionModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowContributionModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Overall Contribution</Text>
-              <TouchableOpacity onPress={() => setShowContributionModal(false)}>
-                <Icon name="close" size={24} color={COLORS.gray} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Executive Summary</Text>
-                <TextInput
-                  style={[styles.input, styles.largeTextArea]}
-                  placeholder="Summarize your overall performance, achievements, and contributions..."
-                  placeholderTextColor={COLORS.lightGray}
-                  value={formData.overallContribution}
-                  onChangeText={(text) => setFormData({ ...formData, overallContribution: text })}
-                  multiline
-                  numberOfLines={8}
-                  textAlignVertical="top"
-                  maxLength={2000}
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowContributionModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveButton}
-                onPress={() => setShowContributionModal(false)}
-              >
-                <Text style={styles.modalSaveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
+      <CommonFooter 
+        companyName="CALDIM ENGINEERING PVT LTD"
+        marqueeText="Performance Management • Self Appraisal • "
+      />
+    </>
   );
 
-  return viewMode === 'list' ? renderListView() : renderEditView();
+  return (
+    <SafeAreaView style={styles.container}>
+      {viewMode === 'list' ? renderListView() : renderEditView()}
+    </SafeAreaView>
+  );
 };
 
-// Add all the styles here (same as before)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -849,7 +739,7 @@ const styles = StyleSheet.create({
   newButtonText: {
     color: COLORS.white,
     marginLeft: 4,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   appraisalCard: {
@@ -875,7 +765,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   appraiserText: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.gray,
     marginTop: 2,
   },
@@ -886,7 +776,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: COLORS.white,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   cardActions: {
@@ -896,15 +786,16 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.lighterGray,
     paddingTop: 12,
     marginBottom: 8,
+    gap: 8,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
     marginBottom: 4,
   },
   actionText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     marginLeft: 4,
   },
@@ -914,7 +805,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   projectsCount: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.lightGray,
   },
   editContainer: {
@@ -965,7 +856,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   yearOptionText: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.gray,
   },
   yearOptionTextSelected: {
@@ -975,26 +866,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 16,
   },
   addButtonText: {
     color: COLORS.white,
-    fontSize: 12,
+    fontSize: 11,
     marginLeft: 4,
   },
   emptyProjects: {
     alignItems: 'center',
-    padding: 24,
+    padding: 20,
   },
   emptyProjectsText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.gray,
     marginTop: 8,
   },
   emptyProjectsSubText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.lightGray,
     marginTop: 4,
   },
@@ -1011,7 +902,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   projectName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.primary,
     flex: 1,
@@ -1024,7 +915,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   projectContribution: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.gray,
     lineHeight: 18,
   },
@@ -1037,7 +928,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   editContributionText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.primary,
     marginLeft: 4,
   },
@@ -1047,7 +938,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   contributionText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.gray,
     lineHeight: 20,
   },
@@ -1058,7 +949,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   emptyContributionText: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.lightGray,
     marginTop: 8,
   },
@@ -1067,6 +958,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 8,
     marginBottom: 32,
+    gap: 12,
   },
   saveButton: {
     flex: 1,
@@ -1074,9 +966,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.gray,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 8,
-    marginRight: 8,
   },
   submitButton: {
     flex: 1,
@@ -1084,20 +975,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 8,
-    marginLeft: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
     color: COLORS.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     marginLeft: 8,
   },
-  // Workflow Info Styles
   workflowInfo: {
     backgroundColor: COLORS.primary + '10',
     borderRadius: 12,
@@ -1107,7 +996,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary + '20',
   },
   workflowTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.primary,
     marginBottom: 12,
@@ -1121,12 +1010,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   workflowLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.gray,
     marginBottom: 4,
   },
   workflowValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
   },
@@ -1170,10 +1059,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: COLORS.gray,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
@@ -1181,7 +1070,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.black,
   },
   textArea: {
@@ -1199,7 +1088,7 @@ const styles = StyleSheet.create({
   },
   modalCancelText: {
     color: COLORS.gray,
-    fontSize: 14,
+    fontSize: 13,
   },
   modalSaveButton: {
     backgroundColor: COLORS.primary,
@@ -1209,7 +1098,7 @@ const styles = StyleSheet.create({
   },
   modalSaveText: {
     color: COLORS.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
 });

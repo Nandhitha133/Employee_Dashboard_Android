@@ -59,7 +59,7 @@ const COLORS = {
   filterBg: '#F9FAFB',
   holidayBg: '#E8F5E9',
   gridBorder: '#D1D5DB',
-  headerBg: '#262760',
+  headerBg: '#0A0F2C',
   alternateRow: '#F9FAFB',
   darkBlue: '#262760',
   shadow: '#000000',
