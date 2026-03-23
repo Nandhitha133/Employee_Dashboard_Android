@@ -5,6 +5,7 @@ export const DIVISIONS = [
   'DAS(Software)',
   'Mechanical',
   'Electrical',
+  
 ] as const;
 
 export type Division = typeof DIVISIONS[number];

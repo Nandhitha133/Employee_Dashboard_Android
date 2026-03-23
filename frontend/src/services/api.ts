@@ -273,7 +273,7 @@ export const employeeAPI = {
   updateEmployee: (id: string, data: Partial<Employee>) => api.put<Employee>(`/employees/${id}`, data),
   updateMyProfile: (data: Partial<Employee>) => api.put<Employee>('/employees/me', data),
   deleteEmployee: (id: string) => api.delete(`/employees/${id}`),
-  getTimesheetEmployees: () => api.get<Employee[]>('/employees/timesheet/employees'),
+  getTimesheetEmployees: () => api.get<any>('/employees/timesheet/employees'),
   getEmployeesByDivision: (division: string) => api.get(`/employees/division/${division}`),
 };
 
@@ -313,7 +313,7 @@ export const specialPermissionAPI = {
   create: (formData: FormData) => api.post('/special-permissions', formData, { 
     headers: { 'Content-Type': 'multipart/form-data' } 
   }),
-  getAll: (params?: any) => api.get('/special-permissions', { params }),
+  getAll: (params?: any) => api.get('/special-permissions/list', { params }),
   my: (params?: any) => api.get('/special-permissions/my', { params }),
   getById: (id: string) => api.get(`/special-permissions/${id}`),
   update: (id: string, data: any) => api.put(`/special-permissions/${id}`, data),
@@ -406,11 +406,36 @@ export const attendanceAPI = {
   syncHikvision: () => hikvisionAPI.pullEvents({}),
 };
 
+// In api.ts
 export const adminTimesheetAPI = {
-  list: (params?: any) => api.get('/admin-timesheet/list', { params }),
+  list: (params?: any) => api.get<any>('/admin-timesheet/list', { params }),
   approve: (id: string) => api.put(`/admin-timesheet/approve/${id}`),
   reject: (id: string, reason: string) => api.put(`/admin-timesheet/reject/${id}`, { reason }),
   summary: (params?: any) => api.get('/admin-timesheet/summary', { params }),
+};
+
+export const adminSpecialPermissionAPI = {
+  create: (formData: FormData) => api.post('/admin-special-permissions', formData, { 
+    headers: { 'Content-Type': 'multipart/form-data' } 
+  }),
+  getAll: (params?: any) => api.get('/admin-special-permissions', { params }),
+  my: (params?: any) => api.get('/admin-special-permissions/my', { params }),
+  getById: (id: string) => api.get(`/admin-special-permissions/${id}`),
+  update: (id: string, data: any) => api.put(`/admin-special-permissions/${id}`, data),
+  delete: (id: string) => api.delete(`/admin-special-permissions/${id}`),
+  approve: (id: string) => api.put(`/admin-special-permissions/${id}/approve`),
+  reject: (id: string, reason: string) => api.put(`/admin-special-permissions/${id}/reject`, { reason }),
+  uploadAttachment: (id: string, file: any) => {
+    const formData = new FormData();
+    formData.append('attachment', {
+      uri: file.uri,
+      type: file.type || 'application/octet-stream',
+      name: file.name || 'file',
+    } as any);
+    return api.post(`/admin-special-permissions/${id}/attachment`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const attendanceApprovalAPI = {

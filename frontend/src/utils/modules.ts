@@ -162,25 +162,26 @@ export const modules: Module[] = [
     iconFamily: 'MaterialIcons',
     category: 'Work & Productivity', 
     showForRoles: ['admin', 'projectmanager', 'manager'],
-    allowEmployeeRole: true,
+   
     order: 7
   },
   
   // 8. Performance Management with submodules
-  {
+   {
     name: 'Performance Management',
     description: 'Performance Management',
-    screen: 'PerformanceManagementFolder' as any,
+    screen: 'PerformanceManagementFolder',
     icon: 'star',
     iconFamily: 'MaterialCommunityIcons',
     category: 'Performance Management',
+    allowEmployeeRole: true,
     hasDropdown: true,
     order: 8,
     children: [
       { 
         name: 'Self Appraisal', 
         description: 'Submit self appraisal', 
-        screen: 'SelfAppraisal' as any, 
+        screen: 'SelfAppraisal', 
         icon: 'star', 
         iconFamily: 'MaterialCommunityIcons',
         category: 'Performance Management',

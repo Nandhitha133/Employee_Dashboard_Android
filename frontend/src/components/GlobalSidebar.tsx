@@ -17,7 +17,6 @@ import IconCommunity from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSidebar } from '../context/SidebarContext';
-import { modules, filterModules, filterChildren, Module } from '../utils/modules';
 
 const { width } = Dimensions.get('window');
 
@@ -31,75 +30,107 @@ const COLORS = {
 
 const GlobalSidebar = () => {
   const navigation = useNavigation();
-  const { isSidebarOpen, toggleSidebar, slideAnim } = useSidebar();
+  const { 
+    isSidebarOpen, 
+    toggleSidebar, 
+    slideAnim, 
+    sidebarModules, 
+    userRole, 
+    userPermissions,
+    closeSidebar 
+  } = useSidebar();
   const [user, setUser] = useState<any>(null);
   const [expandedDropdowns, setExpandedDropdowns] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const loadUser = async () => {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        setUser(JSON.parse(userData));
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          setUser(JSON.parse(userData));
+        }
+      } catch (error) {
+        console.error('Error loading user:', error);
       }
     };
     loadUser();
-  }, [isSidebarOpen]);
+  }, []);
 
+  // Get user role for logging
   const role = user?.role?.toLowerCase() || 'employees';
   const permissions = user?.permissions || [];
 
-  const filteredModules = useMemo(() => filterModules(modules, role, permissions), [role, permissions]);
-
+  // Get modules sorted by order
   const getSidebarModules = () => {
-    const sortedModules = [...filteredModules].sort((a, b) => (a.order || 999) - (b.order || 999));
-    const mainModules = sortedModules.filter(m => m.category === 'Main');
-    const folderModules = sortedModules.filter(m => m.hasDropdown === true);
-    const individualModules = sortedModules.filter(
-      m => m.category !== 'Main' && m.category !== 'Notifications' && !m.hasDropdown
-    );
-    const notificationModules = sortedModules.filter(m => m.category === 'Notifications');
-    return { mainModules, folderModules, individualModules, notificationModules };
+    if (!sidebarModules) return [];
+    return [...sidebarModules].sort((a, b) => (a.order || 999) - (b.order || 999));
   };
 
   const toggleDropdown = (folderName: string) => {
     setExpandedDropdowns(prev => ({ ...prev, [folderName]: !prev[folderName] }));
   };
 
-  const handleModulePress = (module: Module) => {
-    toggleSidebar();
-    if (module.screen === 'Dashboard') {
-      (navigation as any).navigate('Dashboard', { user });
-    } else if (module.hasDropdown && module.children && module.children.length > 0) {
-      const firstChild = module.children[0];
-      (navigation as any).navigate(firstChild.screen);
-    } else {
-      (navigation as any).navigate(module.screen);
-    }
+  const handleModulePress = (module: any) => {
+    closeSidebar(); // Close sidebar first
+    setTimeout(() => {
+      if (module.screen === 'Dashboard') {
+        (navigation as any).navigate('Dashboard', { user });
+      } else if (module.hasDropdown && module.children && module.children.length > 0) {
+        const firstChild = module.children[0];
+        (navigation as any).navigate(firstChild.screen);
+      } else if (module.screen === 'Home') {
+        (navigation as any).navigate('Dashboard', { user });
+      } else {
+        (navigation as any).navigate(module.screen);
+      }
+    }, 100); // Small delay to ensure sidebar closes
   };
 
-  const handleLogout = () => {
-    toggleSidebar();
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', onPress: () => (navigation as any).replace('Login') }
-    ]);
+  const handleLogout = async () => {
+    closeSidebar(); // Close sidebar first
+    
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Clear user data from AsyncStorage
+              await AsyncStorage.removeItem('user');
+              await AsyncStorage.removeItem('token');
+              await AsyncStorage.removeItem('authToken');
+              
+              // Navigate to login
+              (navigation as any).replace('Login');
+            } catch (error) {
+              console.error('Error during logout:', error);
+              // Force navigation even if storage clear fails
+              (navigation as any).replace('Login');
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (!isSidebarOpen) return null;
 
-  const { mainModules, folderModules, individualModules, notificationModules } = getSidebarModules();
-  const allModulesInOrder = [...mainModules, ...folderModules, ...individualModules, ...notificationModules];
+  const allModulesInOrder = getSidebarModules();
 
   return (
     <Modal
       transparent={true}
       visible={isSidebarOpen}
       animationType="none"
-      onRequestClose={toggleSidebar}
+      onRequestClose={closeSidebar}
     >
       <TouchableOpacity 
         activeOpacity={1} 
-        onPress={toggleSidebar} 
+        onPress={closeSidebar} 
         style={styles.overlay}
       >
         <Animated.View 
@@ -112,15 +143,16 @@ const GlobalSidebar = () => {
               style={styles.sidebarLogo}
               resizeMode="contain"
             />
-            <TouchableOpacity onPress={toggleSidebar} style={styles.sidebarCloseButton}>
+            <TouchableOpacity onPress={closeSidebar} style={styles.sidebarCloseButton}>
               <Text style={{ fontSize: 20, color: COLORS.white }}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
             {allModulesInOrder.map((module, index) => {
+              // Handle dropdown modules
               if (module.hasDropdown) {
-                const children = filterChildren(module.children, role, permissions);
+                const children = module.children || [];
                 if (children.length === 0) return null;
                 
                 return (
@@ -145,7 +177,7 @@ const GlobalSidebar = () => {
                     </TouchableOpacity>
                     {expandedDropdowns[module.name] && children.map((child, idx) => (
                       <TouchableOpacity
-                        key={idx}
+                        key={`${child.name}-${idx}`}
                         onPress={() => handleModulePress(child)}
                         style={styles.sidebarSubMenuItem}
                       >
@@ -161,7 +193,9 @@ const GlobalSidebar = () => {
                     ))}
                   </View>
                 );
-              } else {
+              } 
+              // Handle regular modules
+              else {
                 return (
                   <TouchableOpacity
                     key={module.name}
@@ -181,6 +215,7 @@ const GlobalSidebar = () => {
               }
             })}
             
+            {/* Logout Button */}
             <TouchableOpacity
               onPress={handleLogout}
               style={[styles.sidebarMenuItem, styles.logoutItem]}
@@ -207,6 +242,10 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: COLORS.primary,
     elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
   },
   sidebarHeader: {
     padding: 20,
@@ -215,6 +254,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 50,
   },
   sidebarLogo: {
     width: 120,
@@ -236,6 +276,7 @@ const styles = StyleSheet.create({
   sidebarMenuIcon: {
     width: 30,
     marginRight: 15,
+    alignItems: 'center',
   },
   sidebarMenuText: {
     flex: 1,
@@ -252,17 +293,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   sidebarSubMenuIcon: {
+    width: 24,
     marginRight: 12,
+    alignItems: 'center',
   },
   sidebarSubMenuText: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
+    flex: 1,
   },
   logoutItem: {
     marginTop: 20,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 30,
   },
 });
 
 export default GlobalSidebar;
+
+
+
+

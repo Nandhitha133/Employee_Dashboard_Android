@@ -132,6 +132,7 @@ interface Module {
   hasDropdown?: boolean;
   children?: Module[];
   order?: number; // For sidebar ordering
+  employeeOnly?: boolean; // Flag to indicate this module should only show for employees
 }
 
 // Category Images - Keeping Unsplash images
@@ -216,6 +217,20 @@ const DashboardScreen = () => {
     setRefreshing(false);
   };
 
+  // Employee-specific modules list based on requirements
+  const employeeModulesList = [
+    'Home',
+    'My Profile',
+    'Timesheet',
+    'Employee Attendance',
+    'Self Appraisal',
+    'Leave Applications',
+    'Policy Portal',
+    'Salary Slips',
+    'Employee Exit Form',
+    'Unified Hub Calendar'
+  ];
+
   // Complete modules list with exact sidebar order
   const modules: Module[] = [
     // 1. Home
@@ -293,6 +308,7 @@ const DashboardScreen = () => {
       category: 'Work & Productivity', 
       permission: 'attendance_access', 
       showForRoles: ['admin', 'hr', 'manager'],
+      allowEmployeeRole: true,
       order: 4
     },
     
@@ -353,7 +369,7 @@ const DashboardScreen = () => {
       ],
     },
     
-    // 7. Project Allocation
+    // 7. Project Allocation - NOT visible for employees
     { 
       name: 'Project Allocation', 
       description: 'Assign employees to projects', 
@@ -362,7 +378,7 @@ const DashboardScreen = () => {
       iconFamily: 'MaterialIcons',
       category: 'Work & Productivity', 
       showForRoles: ['admin', 'projectmanager', 'manager'],
-      allowEmployeeRole: true,
+      allowEmployeeRole: false, // Explicitly set to false for employees
       order: 7
     },
     
@@ -840,6 +856,20 @@ const DashboardScreen = () => {
     },
   ];
 
+  // Function to check if a module should be visible for employee
+  const isEmployeeModuleVisible = (moduleName: string): boolean => {
+    // Admin sees everything
+    if (role === 'admin') return true;
+    
+    // For employees, check against the allowed list
+    if (role === 'employees' || role === 'employee') {
+      return employeeModulesList.includes(moduleName);
+    }
+    
+    // For other roles (manager, hr, etc.), use the existing logic
+    return true;
+  };
+
   // Filter modules based on user role and permissions
   const filterModules = (items: Module[]): Module[] => {
     // Admin can see everything
@@ -851,11 +881,28 @@ const DashboardScreen = () => {
     console.log('Filtering modules for role:', role);
     
     const filtered = items.filter(item => {
-      // Check if item is Main category - always show Home and My Profile
-      if (item.category === 'Main' || item.category === 'Notifications') {
+      // Always show Notifications
+      if (item.category === 'Notifications') {
         return true;
       }
 
+      // For employees, check if the module is in the allowed list
+      if (role === 'employees' || role === 'employee') {
+        // Check if module name is in employee allowed list
+        if (employeeModulesList.includes(item.name)) {
+          return true;
+        }
+        // For dropdown modules, we need to check children separately
+        if (item.hasDropdown && item.children) {
+          const hasVisibleChildren = item.children.some(child => 
+            employeeModulesList.includes(child.name)
+          );
+          return hasVisibleChildren;
+        }
+        return false;
+      }
+
+      // For other roles (manager, hr, etc.), use existing logic
       // Check if item has showForRoles restriction
       if (item.showForRoles && item.showForRoles.length > 0) {
         if (item.showForRoles.includes(role)) {
@@ -873,8 +920,8 @@ const DashboardScreen = () => {
       }
 
       // For employees, check allowEmployeeRole
-      if (role === 'employees') {
-        return item.allowEmployeeRole === true;
+      if (role === 'employees' && item.allowEmployeeRole !== true) {
+        return false;
       }
 
       return true;
@@ -889,8 +936,16 @@ const DashboardScreen = () => {
     if (!children) return [];
     
     return children.filter(child => {
+      // Admin sees everything
       if (role === 'admin') return true;
 
+      // For employees, only show "Self Appraisal" from Performance Management
+      if (role === 'employees' || role === 'employee') {
+        // Only show if the child is in the employee allowed list
+        return employeeModulesList.includes(child.name);
+      }
+
+      // For other roles, use existing logic
       if (child.showForRoles && !child.showForRoles.includes(role)) {
         return false;
       }
@@ -907,12 +962,33 @@ const DashboardScreen = () => {
     });
   };
 
-  // Get filtered modules
-  const filteredModules = useMemo(() => filterModules(modules), [role, permissions]);
+  // Create a processed version of modules with filtered children
+  const getProcessedModules = useMemo(() => {
+    return modules.map(module => {
+      if (module.hasDropdown && module.children) {
+        return {
+          ...module,
+          children: filterChildren(module.children)
+        };
+      }
+      return module;
+    });
+  }, [role, permissions]);
 
-  // Filter modules based on search term
+  // Get filtered modules
+  const filteredModules = useMemo(() => filterModules(getProcessedModules), [role, permissions, getProcessedModules]);
+
+  // Filter modules based on search term and hide empty dropdowns
   const getVisibleModules = useMemo(() => {
-    let filtered = filteredModules.filter(m => m.category !== 'Main' && !m.hasDropdown && m.category !== 'Notifications');
+    let filtered = filteredModules.filter(m => {
+      // Skip Main category modules (Home, My Profile)
+      if (m.category === 'Main') return false;
+      // Skip Notifications
+      if (m.category === 'Notifications') return false;
+      // For dropdown modules, only show if they have visible children
+      if (m.hasDropdown && m.children && m.children.length === 0) return false;
+      return true;
+    });
     
     if (searchTerm) {
       const term = searchTerm.toLowerCase().trim();
@@ -1109,8 +1185,6 @@ const DashboardScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
         }
       >
-       
-
         {searchTerm ? (
           // Search Results
           <View style={styles.searchResultsContainer}>
@@ -1367,13 +1441,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   categoryImage: {
     width: '100%',
-    height: 120,
+    height: 200,
   },
   categoryGradient: {
     position: 'absolute',
