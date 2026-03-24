@@ -39,98 +39,44 @@ const GlobalSidebar = () => {
     userPermissions,
     closeSidebar 
   } = useSidebar();
-  const [user, setUser] = useState<any>(null);
   const [expandedDropdowns, setExpandedDropdowns] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const userData = await AsyncStorage.getItem('user');
-        if (userData) {
-          setUser(JSON.parse(userData));
-        }
-      } catch (error) {
-        console.error('Error loading user:', error);
-      }
-    };
-    loadUser();
-  }, []);
-
-  // Get user role for logging
-  const role = user?.role?.toLowerCase() || 'employees';
-  const permissions = user?.permissions || [];
-
-  // Get modules sorted by order
-  const getSidebarModules = () => {
-    if (!sidebarModules) return [];
-    return [...sidebarModules].sort((a, b) => (a.order || 999) - (b.order || 999));
-  };
 
   const toggleDropdown = (folderName: string) => {
     setExpandedDropdowns(prev => ({ ...prev, [folderName]: !prev[folderName] }));
   };
 
   const handleModulePress = (module: any) => {
-    closeSidebar(); // Close sidebar first
-    setTimeout(() => {
-      if (module.screen === 'Dashboard') {
-        (navigation as any).navigate('Dashboard', { user });
-      } else if (module.hasDropdown && module.children && module.children.length > 0) {
-        const firstChild = module.children[0];
-        (navigation as any).navigate(firstChild.screen);
-      } else if (module.screen === 'Home') {
-        (navigation as any).navigate('Dashboard', { user });
-      } else {
-        (navigation as any).navigate(module.screen);
-      }
-    }, 100); // Small delay to ensure sidebar closes
+    toggleSidebar();
+    if (module.screen === 'Dashboard') {
+      (navigation as any).navigate('Dashboard');
+    } else if (module.hasDropdown && module.children && module.children.length > 0) {
+      const firstChild = module.children[0];
+      (navigation as any).navigate(firstChild.screen);
+    } else {
+      (navigation as any).navigate(module.screen);
+    }
   };
 
-  const handleLogout = async () => {
-    closeSidebar(); // Close sidebar first
-    
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Clear user data from AsyncStorage
-              await AsyncStorage.removeItem('user');
-              await AsyncStorage.removeItem('token');
-              await AsyncStorage.removeItem('authToken');
-              
-              // Navigate to login
-              (navigation as any).replace('Login');
-            } catch (error) {
-              console.error('Error during logout:', error);
-              // Force navigation even if storage clear fails
-              (navigation as any).replace('Login');
-            }
-          }
-        }
-      ]
-    );
+  const handleLogout = () => {
+    toggleSidebar();
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', onPress: () => (navigation as any).replace('Login') }
+    ]);
   };
 
   if (!isSidebarOpen) return null;
-
-  const allModulesInOrder = getSidebarModules();
 
   return (
     <Modal
       transparent={true}
       visible={isSidebarOpen}
       animationType="none"
-      onRequestClose={closeSidebar}
+      onRequestClose={toggleSidebar}
     >
       <TouchableOpacity 
         activeOpacity={1} 
-        onPress={closeSidebar} 
+        onPress={toggleSidebar} 
         style={styles.overlay}
       >
         <Animated.View 
@@ -143,17 +89,15 @@ const GlobalSidebar = () => {
               style={styles.sidebarLogo}
               resizeMode="contain"
             />
-            <TouchableOpacity onPress={closeSidebar} style={styles.sidebarCloseButton}>
+            <TouchableOpacity onPress={toggleSidebar} style={styles.sidebarCloseButton}>
               <Text style={{ fontSize: 20, color: COLORS.white }}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
-            {allModulesInOrder.map((module, index) => {
-              // Handle dropdown modules
+            {sidebarModules.map((module, index) => {
               if (module.hasDropdown) {
-                const children = module.children || [];
-                if (children.length === 0) return null;
+                if (!module.children || module.children.length === 0) return null;
                 
                 return (
                   <View key={module.name}>
@@ -175,9 +119,9 @@ const GlobalSidebar = () => {
                         color={COLORS.white} 
                       />
                     </TouchableOpacity>
-                    {expandedDropdowns[module.name] && children.map((child, idx) => (
+                    {expandedDropdowns[module.name] && module.children.map((child, idx) => (
                       <TouchableOpacity
-                        key={`${child.name}-${idx}`}
+                        key={idx}
                         onPress={() => handleModulePress(child)}
                         style={styles.sidebarSubMenuItem}
                       >
@@ -193,9 +137,7 @@ const GlobalSidebar = () => {
                     ))}
                   </View>
                 );
-              } 
-              // Handle regular modules
-              else {
+              } else {
                 return (
                   <TouchableOpacity
                     key={module.name}
@@ -215,7 +157,6 @@ const GlobalSidebar = () => {
               }
             })}
             
-            {/* Logout Button */}
             <TouchableOpacity
               onPress={handleLogout}
               style={[styles.sidebarMenuItem, styles.logoutItem]}

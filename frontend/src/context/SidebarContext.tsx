@@ -104,11 +104,13 @@ interface SidebarContextType {
   openSidebar: () => void;
 }
 
-// Employee-specific modules list (includes Performance Management via children)
+// Employee-specific modules list (includes all sub-modules shown in the images)
 const employeeModulesList = [
   'Home',
   'My Profile',
   'Timesheet',
+  'Timesheet History',
+  'Attendance Regularization',
   'Employee Attendance',
   'Performance Management',
   'Self Appraisal',
@@ -137,8 +139,8 @@ const sidebarModulesData: Module[] = [
     name: 'My Profile', 
     description: 'View your profile', 
     screen: 'MyProfile', 
-    icon: 'account-circle', 
-    iconFamily: 'MaterialCommunityIcons', 
+    icon: 'person', 
+    iconFamily: 'MaterialIcons', 
     category: 'Main', 
     allowEmployeeRole: true,
     order: 2
@@ -169,7 +171,7 @@ const sidebarModulesData: Module[] = [
         name: 'Timesheet History', 
         description: 'View past timesheets', 
         screen: 'TimesheetHistory', 
-        icon: 'history', 
+        icon: 'assignment', 
         iconFamily: 'MaterialIcons',
         category: 'Work & Productivity',
         allowEmployeeRole: true 
@@ -178,8 +180,8 @@ const sidebarModulesData: Module[] = [
         name: 'Attendance Regularization', 
         description: 'Regularize attendance', 
         screen: 'AttendanceRegularization', 
-        icon: 'calendar-clock', 
-        iconFamily: 'MaterialCommunityIcons',
+        icon: 'access-time', 
+        iconFamily: 'MaterialIcons',
         category: 'Work & Productivity',
         allowEmployeeRole: true 
       },
@@ -191,8 +193,8 @@ const sidebarModulesData: Module[] = [
     name: 'Employee Attendance', 
     description: 'Attendance tracking', 
     screen: 'EmployeeAttendance', 
-    icon: 'clock-outline', 
-    iconFamily: 'MaterialCommunityIcons', 
+    icon: 'access-time', 
+    iconFamily: 'MaterialIcons', 
     category: 'Work & Productivity', 
     permission: 'attendance_access', 
     showForRoles: ['admin', 'hr', 'manager'],
@@ -275,8 +277,8 @@ const sidebarModulesData: Module[] = [
     name: 'Performance Management',
     description: 'Performance Management',
     screen: 'PerformanceManagementFolder',
-    icon: 'star',
-    iconFamily: 'MaterialCommunityIcons',
+    icon: 'star-border',
+    iconFamily: 'MaterialIcons',
     category: 'Performance Management',
     allowEmployeeRole: true,
     hasDropdown: true,
@@ -286,8 +288,8 @@ const sidebarModulesData: Module[] = [
         name: 'Self Appraisal', 
         description: 'Submit self appraisal', 
         screen: 'SelfAppraisal', 
-        icon: 'star', 
-        iconFamily: 'MaterialCommunityIcons',
+        icon: 'star-border', 
+        iconFamily: 'MaterialIcons', 
         category: 'Performance Management',
         permission: 'self_appraisal',
         allowEmployeeRole: true 
@@ -326,8 +328,8 @@ const sidebarModulesData: Module[] = [
         name: 'Appraisal Workflow', 
         description: 'Track appraisal status', 
         screen: 'AppraisalWorkflow', 
-        icon: 'timeline', 
-        iconFamily: 'MaterialIcons',
+        icon: 'star-border', 
+        iconFamily: 'MaterialIcons', 
         category: 'Performance Management',
         permission: 'appraisal_workflow',
         allowEmployeeRole: true 
@@ -755,8 +757,10 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const slideAnim = useRef(new Animated.Value(-width));
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    if (isSidebarOpen) {
+      loadUser();
+    }
+  }, [isSidebarOpen]);
 
   const loadUser = async () => {
     try {
@@ -768,6 +772,11 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (role === 'project_manager') role = 'projectmanager';
         setUserRole(role);
         setUserPermissions(userData.permissions || []);
+      } else {
+        // Clear state if no user found
+        setUser(null);
+        setUserRole('');
+        setUserPermissions([]);
       }
     } catch (error) {
       console.error('Error loading user for sidebar:', error);
