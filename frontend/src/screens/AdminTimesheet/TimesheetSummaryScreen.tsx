@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
   Platform,
   KeyboardAvoidingView,
@@ -17,6 +16,7 @@ import { Picker } from '@react-native-picker/picker';
 import { adminTimesheetAPI } from '../../services/api';
 import CommonHeader from '../../components/CommonHeader';
 import CommonFooter from '../../components/CommonFooter';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const COLORS = {
   primary: '#0A0F2C',

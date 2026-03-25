@@ -14,8 +14,9 @@ export interface ForgotPasswordData {
 }
 
 export interface ResetPasswordData {
-  token: string;
-  password: string;
+  employeeId: string;
+  otp: string;
+  newPassword: string;
 }
 
 export interface User {

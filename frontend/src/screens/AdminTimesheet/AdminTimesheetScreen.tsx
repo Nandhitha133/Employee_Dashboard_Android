@@ -1,5 +1,5 @@
 // screens/AdminTimesheet/AdminTimesheetScreen.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   TextInput,
   RefreshControl,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -109,11 +110,15 @@ interface StatCardProps {
   color: string;
 }
 
+const PAGE_SIZE = 20; // Number of items per page
+
 const AdminTimesheetScreen = () => {
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [showFilters, setShowFilters] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -153,6 +158,13 @@ const AdminTimesheetScreen = () => {
   const isMounted = useRef(true);
   const fetchTimeout = useRef<any>(null);
   const initialLoadDone = useRef(false);
+
+  // Paginated data
+  const paginatedTimesheets = useMemo(() => {
+    return timesheets.slice(0, currentPage * PAGE_SIZE);
+  }, [timesheets, currentPage]);
+
+  const hasMore = paginatedTimesheets.length < timesheets.length;
 
   // Cleanup on unmount
   useEffect(() => {
@@ -196,6 +208,7 @@ const AdminTimesheetScreen = () => {
     }
     
     fetchTimeout.current = setTimeout(() => {
+      setCurrentPage(1); // Reset pagination on filter change
       fetchTimesheets();
     }, 500);
     
@@ -477,6 +490,7 @@ const AdminTimesheetScreen = () => {
 
       if (isMounted.current) {
         setTimesheets(data);
+        setCurrentPage(1);
         setIsDataLoaded(true);
         setIsInitialLoadComplete(true);
         setStats({
@@ -507,6 +521,7 @@ const AdminTimesheetScreen = () => {
         setLoading(false);
         setInitialLoading(false);
         setRefreshing(false);
+        setLoadingMore(false);
       }
     }
   };
@@ -514,7 +529,18 @@ const AdminTimesheetScreen = () => {
   const onRefresh = () => {
     if (!isMounted.current) return;
     setRefreshing(true);
+    setCurrentPage(1);
     fetchTimesheets();
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      setLoadingMore(true);
+      setTimeout(() => {
+        setCurrentPage(prev => prev + 1);
+        setLoadingMore(false);
+      }, 300);
+    }
   };
 
   const handleFilterChange = (filterName: string, value: string) => {
@@ -538,6 +564,7 @@ const AdminTimesheetScreen = () => {
   };
 
   const handleRefresh = () => {
+    setCurrentPage(1);
     fetchTimesheets();
   };
 
@@ -761,10 +788,10 @@ const AdminTimesheetScreen = () => {
     </Modal>
   );
 
-  // Filter Section
+  // Filter Section - Updated for better text visibility
   const renderFilters = () => (
-    <View style={{ backgroundColor: COLORS.white, padding: 12, marginBottom: 12, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+    <View style={{ backgroundColor: COLORS.white, padding: 16, marginBottom: 12, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.textPrimary }}>Filters</Text>
         {isFilterApplied() && (
           <TouchableOpacity onPress={handleClearFilters}>
@@ -773,129 +800,134 @@ const AdminTimesheetScreen = () => {
         )}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          {/* Employee ID Filter */}
-          <View style={{ width: 150 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Employee ID</Text>
-            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-              <Picker
-                selectedValue={filters.employeeId}
-                onValueChange={(value: string) => handleFilterChange('employeeId', value)}
-                style={{ height: 40, width: 150 }}
-              >
-                {employeeIdOptions.map(id => (
-                  <PickerItem key={id} label={id === '' ? 'All Employees' : id} value={id} />
-                ))}
-              </Picker>
-            </View>
-          </View>
-
-          {/* Division Filter */}
-          {!isProjectManager && (
-            <View style={{ width: 120 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Division</Text>
-              <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-                <Picker
-                  selectedValue={filters.division}
-                  onValueChange={(value: string) => handleFilterChange('division', value)}
-                  style={{ height: 40, width: 120 }}
-                >
-                  <PickerItem label="All Division" value="All Division" />
-                  <PickerItem label="SDS" value="SDS" />
-                  <PickerItem label="TEKLA" value="TEKLA" />
-                  <PickerItem label="DAS(Software)" value="DAS(Software)" />
-                  <PickerItem label="Mechanical" value="Mechanical" />
-                </Picker>
-              </View>
-            </View>
-          )}
-
-          {/* Location Filter */}
-          {!isProjectManager && (
-            <View style={{ width: 120 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Location</Text>
-              <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-                <Picker
-                  selectedValue={filters.location}
-                  onValueChange={(value: string) => handleFilterChange('location', value)}
-                  style={{ height: 40, width: 120 }}
-                >
-                  <PickerItem label="All Locations" value="All Locations" />
-                  <PickerItem label="Chennai" value="Chennai" />
-                  <PickerItem label="Hosur" value="Hosur" />
-                </Picker>
-              </View>
-            </View>
-          )}
-
-          {/* Status Filter */}
-          <View style={{ width: 120 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Status</Text>
-            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-              <Picker
-                selectedValue={filters.status}
-                onValueChange={(value: string) => handleFilterChange('status', value)}
-                style={{ height: 40, width: 120 }}
-              >
-                <PickerItem label="All Status" value="All Status" />
-                <PickerItem label="Submitted" value="Submitted" />
-                <PickerItem label="Approved" value="Approved" />
-                <PickerItem label="Rejected" value="Rejected" />
-                <PickerItem label="Not Submitted" value="Not Submitted" />
-              </Picker>
-            </View>
-          </View>
-
-          {/* Year Filter */}
-          <View style={{ width: 100 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Year</Text>
-            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-              <Picker
-                selectedValue={filters.year}
-                onValueChange={(value: string) => handleFilterChange('year', value)}
-                style={{ height: 40, width: 100 }}
-              >
-                {yearOptions.map(year => (
-                  <PickerItem key={year} label={year} value={year} />
-                ))}
-              </Picker>
-            </View>
-          </View>
-
-          {/* Week Filter */}
-          <View style={{ width: 120 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Week</Text>
-            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-              <Picker
-                selectedValue={filters.week}
-                onValueChange={(value: string) => handleFilterChange('week', value)}
-                style={{ height: 40, width: 120 }}
-              >
-                {weekOptions.map(week => (
-                  <PickerItem key={week} label={week} value={week} />
-                ))}
-              </Picker>
-            </View>
-          </View>
-
-          {/* Project Filter */}
-          <View style={{ width: 150 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 }}>Project</Text>
-            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 }}>
-              <Picker
-                selectedValue={filters.project}
-                onValueChange={(value: string) => handleFilterChange('project', value)}
-                style={{ height: 40, width: 150 }}
-              >
-                {projectOptions.map(p => (
-                  <PickerItem key={p} label={p} value={p} />
-                ))}
-              </Picker>
-            </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        {/* Employee ID Filter */}
+        <View style={{ width: '48%', minWidth: 150 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Employee ID</Text>
+          <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+            <Picker
+              selectedValue={filters.employeeId}
+              onValueChange={(value: string) => handleFilterChange('employeeId', value)}
+              style={{ height: 48, width: '100%' }}
+              dropdownIconColor={COLORS.primary}
+            >
+              {employeeIdOptions.map(id => (
+                <PickerItem key={id} label={id === '' ? 'All Employees' : id} value={id} />
+              ))}
+            </Picker>
           </View>
         </View>
-      </ScrollView>
+
+        {/* Division Filter */}
+        {!isProjectManager && (
+          <View style={{ width: '48%', minWidth: 150 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Division</Text>
+            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+              <Picker
+                selectedValue={filters.division}
+                onValueChange={(value: string) => handleFilterChange('division', value)}
+                style={{ height: 48, width: '100%' }}
+                dropdownIconColor={COLORS.primary}
+              >
+                <PickerItem label="All Division" value="All Division" />
+                <PickerItem label="SDS" value="SDS" />
+                <PickerItem label="TEKLA" value="TEKLA" />
+                <PickerItem label="DAS(Software)" value="DAS(Software)" />
+                <PickerItem label="Mechanical" value="Mechanical" />
+              </Picker>
+            </View>
+          </View>
+        )}
+
+        {/* Location Filter */}
+        {!isProjectManager && (
+          <View style={{ width: '48%', minWidth: 150 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Location</Text>
+            <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+              <Picker
+                selectedValue={filters.location}
+                onValueChange={(value: string) => handleFilterChange('location', value)}
+                style={{ height: 48, width: '100%' }}
+                dropdownIconColor={COLORS.primary}
+              >
+                <PickerItem label="All Locations" value="All Locations" />
+                <PickerItem label="Chennai" value="Chennai" />
+                <PickerItem label="Hosur" value="Hosur" />
+              </Picker>
+            </View>
+          </View>
+        )}
+
+        {/* Status Filter */}
+        <View style={{ width: '48%', minWidth: 150 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Status</Text>
+          <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+            <Picker
+              selectedValue={filters.status}
+              onValueChange={(value: string) => handleFilterChange('status', value)}
+              style={{ height: 48, width: '100%' }}
+              dropdownIconColor={COLORS.primary}
+            >
+              <PickerItem label="All Status" value="All Status" />
+              <PickerItem label="Submitted" value="Submitted" />
+              <PickerItem label="Approved" value="Approved" />
+              <PickerItem label="Rejected" value="Rejected" />
+              <PickerItem label="Not Submitted" value="Not Submitted" />
+            </Picker>
+          </View>
+        </View>
+
+        {/* Year Filter */}
+        <View style={{ width: '48%', minWidth: 150 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Year</Text>
+          <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+            <Picker
+              selectedValue={filters.year}
+              onValueChange={(value: string) => handleFilterChange('year', value)}
+              style={{ height: 48, width: '100%' }}
+              dropdownIconColor={COLORS.primary}
+            >
+              {yearOptions.map(year => (
+                <PickerItem key={year} label={year} value={year} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+
+        {/* Week Filter */}
+        <View style={{ width: '48%', minWidth: 150 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Week</Text>
+          <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+            <Picker
+              selectedValue={filters.week}
+              onValueChange={(value: string) => handleFilterChange('week', value)}
+              style={{ height: 48, width: '100%' }}
+              dropdownIconColor={COLORS.primary}
+            >
+              {weekOptions.map(week => (
+                <PickerItem key={week} label={week} value={week} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+
+        {/* Project Filter */}
+        <View style={{ width: '48%', minWidth: 150 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 }}>Project</Text>
+          <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.white }}>
+            <Picker
+              selectedValue={filters.project}
+              onValueChange={(value: string) => handleFilterChange('project', value)}
+              style={{ height: 48, width: '100%' }}
+              dropdownIconColor={COLORS.primary}
+            >
+              {projectOptions.map(p => (
+                <PickerItem key={p} label={p} value={p} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      </View>
     </View>
   );
 
@@ -905,46 +937,46 @@ const AdminTimesheetScreen = () => {
       flexDirection: 'row', 
       backgroundColor: COLORS.primary, 
       paddingVertical: 12, 
-      paddingHorizontal: 4,
+      paddingHorizontal: 8,
     }}>
-      <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Emp ID</Text>
-      <Text style={{ width: 100, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Name</Text>
-      {!isProjectManager && <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Division</Text>}
-      {!isProjectManager && <Text style={{ width: 70, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Location</Text>}
-      <Text style={{ width: 90, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Week</Text>
-      <Text style={{ width: 100, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Projects</Text>
-      <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Hours</Text>
-      <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12, paddingLeft: 4 }}>Status</Text>
+      <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Emp ID</Text>
+      <Text style={{ width: 100, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Name</Text>
+      {!isProjectManager && <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Division</Text>}
+      {!isProjectManager && <Text style={{ width: 70, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Location</Text>}
+      <Text style={{ width: 90, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Week</Text>
+      <Text style={{ width: 100, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Projects</Text>
+      <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Hours</Text>
+      <Text style={{ width: 80, color: COLORS.white, fontWeight: '700', fontSize: 12 }}>Status</Text>
       <Text style={{ width: 100, color: COLORS.white, fontWeight: '700', fontSize: 12, textAlign: 'center' }}>Actions</Text>
     </View>
   );
 
-  // Table Row
-  const renderTableRow = (timesheet: Timesheet, index: number) => {
-    const statusColors = getStatusBadge(timesheet.status || '');
-    const projects = (timesheet.timeEntries || [])
+  // Table Row Component with memoization
+  const renderTableRow = useCallback(({ item, index }: { item: Timesheet; index: number }) => {
+    const statusColors = getStatusBadge(item.status || '');
+    const projects = (item.timeEntries || [])
       .map(entry => entry.project)
       .filter(Boolean)
       .join(', ');
 
     return (
-      <View key={timesheet._id} style={{ 
+      <View style={{ 
         flexDirection: 'row', 
         backgroundColor: index % 2 === 0 ? COLORS.white : COLORS.filterBg,
-        paddingVertical: 10,
-        paddingHorizontal: 4,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
         alignItems: 'center',
         minHeight: 50,
       }}>
-        <Text style={{ width: 80, color: COLORS.blue, fontWeight: '500', fontSize: 12 }}>{timesheet.employeeId || '—'}</Text>
-        <Text style={{ width: 100, color: COLORS.textPrimary, fontSize: 12 }}>{timesheet.employeeName}</Text>
-        {!isProjectManager && <Text style={{ width: 80, color: COLORS.textSecondary, fontSize: 12 }}>{timesheet.division || '—'}</Text>}
-        {!isProjectManager && <Text style={{ width: 70, color: COLORS.textSecondary, fontSize: 12 }}>{timesheet.location || '—'}</Text>}
-        <Text style={{ width: 90, color: COLORS.textPrimary, fontSize: 12 }}>{timesheet.week || '—'}</Text>
+        <Text style={{ width: 80, color: COLORS.blue, fontWeight: '500', fontSize: 12 }}>{item.employeeId || '—'}</Text>
+        <Text style={{ width: 100, color: COLORS.textPrimary, fontSize: 12 }} numberOfLines={1}>{item.employeeName}</Text>
+        {!isProjectManager && <Text style={{ width: 80, color: COLORS.textSecondary, fontSize: 12 }} numberOfLines={1}>{item.division || '—'}</Text>}
+        {!isProjectManager && <Text style={{ width: 70, color: COLORS.textSecondary, fontSize: 12 }} numberOfLines={1}>{item.location || '—'}</Text>}
+        <Text style={{ width: 90, color: COLORS.textPrimary, fontSize: 12 }} numberOfLines={1}>{item.week || '—'}</Text>
         <Text style={{ width: 100, color: COLORS.textSecondary, fontSize: 11 }} numberOfLines={1}>{projects || '—'}</Text>
-        <Text style={{ width: 80, color: COLORS.green, fontWeight: '600', fontSize: 12 }}>{formatDuration(timesheet.weeklyTotal || 0)}</Text>
+        <Text style={{ width: 80, color: COLORS.green, fontWeight: '600', fontSize: 12 }}>{formatDuration(item.weeklyTotal || 0)}</Text>
         <View style={{ width: 80 }}>
           <View style={[{
             paddingHorizontal: 8,
@@ -953,37 +985,37 @@ const AdminTimesheetScreen = () => {
             alignSelf: 'flex-start',
           }, { backgroundColor: statusColors.bg }]}>
             <Text style={{ fontSize: 10, color: statusColors.text, fontWeight: '600' }}>
-              {timesheet.status === 'Submitted' ? 'Pending' : (timesheet.status || '—')}
+              {item.status === 'Submitted' ? 'Pending' : (item.status || '—')}
             </Text>
           </View>
         </View>
-        <View style={{ width: 100, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+        <View style={{ width: 100, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
           <TouchableOpacity
-            onPress={() => handleView(timesheet)}
+            onPress={() => handleView(item)}
             style={{ padding: 6, backgroundColor: COLORS.primary, borderRadius: 4 }}
           >
             <Icon name="visibility" size={14} color={COLORS.white} />
           </TouchableOpacity>
           
-          {!['approved', 'rejected', 'not submitted'].includes((timesheet.status || '').toLowerCase()) && (
+          {!['approved', 'rejected', 'not submitted'].includes((item.status || '').toLowerCase()) && (
             <>
               <TouchableOpacity
-                onPress={() => openRejectDialog(timesheet._id)}
-                disabled={actionLoading[timesheet._id]}
+                onPress={() => openRejectDialog(item._id)}
+                disabled={actionLoading[item._id]}
                 style={{ padding: 6, backgroundColor: COLORS.red, borderRadius: 4 }}
               >
-                {actionLoading[timesheet._id] ? (
+                {actionLoading[item._id] ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
                   <Icon name="close" size={14} color={COLORS.white} />
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleApprove(timesheet._id)}
-                disabled={actionLoading[timesheet._id]}
+                onPress={() => handleApprove(item._id)}
+                disabled={actionLoading[item._id]}
                 style={{ padding: 6, backgroundColor: COLORS.green, borderRadius: 4 }}
               >
-                {actionLoading[timesheet._id] ? (
+                {actionLoading[item._id] ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
                   <Icon name="check" size={14} color={COLORS.white} />
@@ -994,7 +1026,18 @@ const AdminTimesheetScreen = () => {
         </View>
       </View>
     );
-  };
+  }, [isProjectManager, actionLoading]);
+
+  // Footer Component for load more
+  const renderFooter = useCallback(() => {
+    if (!hasMore) return null;
+    return (
+      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+        <Text style={{ marginTop: 8, fontSize: 12, color: COLORS.gray }}>Loading more...</Text>
+      </View>
+    );
+  }, [hasMore]);
 
   // View Modal
   const renderViewModal = () => {
@@ -1254,7 +1297,7 @@ const AdminTimesheetScreen = () => {
           style={{
             backgroundColor: COLORS.primary,
             paddingHorizontal: 16,
-            paddingVertical: 10,
+            paddingVertical: 12,
             borderRadius: 8,
             flexDirection: 'row',
             alignItems: 'center',
@@ -1317,7 +1360,7 @@ const AdminTimesheetScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Timesheets Table */}
+        {/* Timesheets Table with Virtualized List */}
         {initialLoading ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -1325,19 +1368,28 @@ const AdminTimesheetScreen = () => {
           </View>
         ) : (
           <View style={{ backgroundColor: COLORS.white, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' }}>
-            <ScrollView horizontal>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
               <View>
                 {renderTableHeader()}
-                <View>
-                  {timesheets.length === 0 ? (
+                <FlatList
+                  data={paginatedTimesheets}
+                  keyExtractor={(item) => item._id}
+                  renderItem={renderTableRow}
+                  ListEmptyComponent={
                     <View style={{ padding: 40, alignItems: 'center' }}>
                       <Icon name="assignment" size={48} color={COLORS.lightGray} />
                       <Text style={{ color: COLORS.gray, fontSize: 14, marginTop: 8 }}>No timesheets found</Text>
                     </View>
-                  ) : (
-                    timesheets.map((timesheet, index) => renderTableRow(timesheet, index))
-                  )}
-                </View>
+                  }
+                  ListFooterComponent={renderFooter}
+                  onEndReached={loadMore}
+                  onEndReachedThreshold={0.5}
+                  scrollEnabled={false}
+                  initialNumToRender={10}
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                  removeClippedSubviews={true}
+                />
               </View>
             </ScrollView>
           </View>

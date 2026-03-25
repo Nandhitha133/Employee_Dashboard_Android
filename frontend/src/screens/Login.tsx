@@ -48,6 +48,15 @@ interface Employee {
     designation?: string;
 }
 
+interface Announcement {
+    _id: string;
+    title: string;
+    message: string;
+    startDate?: string;
+    endDate?: string;
+    priority?: string;
+}
+
 // Define navigation type
 type RootStackParamList = {
     Login: undefined;
@@ -108,7 +117,7 @@ const ForgotPasswordModal = React.memo(({
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
     
-    // Use refs for uncontrolled inputs - THIS IS THE KEY FIX!
+    // Use refs for uncontrolled inputs
     const employeeIdRef = useRef<TextInput>(null);
     const otpRef = useRef<TextInput>(null);
     const newPasswordRef = useRef<TextInput>(null);
@@ -202,7 +211,7 @@ const ForgotPasswordModal = React.memo(({
                                 Reset your account password
                             </Text>
 
-                            {/* Step 1: Employee ID - UNCONTROLLED INPUT */}
+                            {/* Step 1: Employee ID */}
                             {step === 1 && (
                                 <View style={styles.inputContainer}>
                                     <Text style={styles.inputLabel}>Employee ID</Text>
@@ -215,7 +224,6 @@ const ForgotPasswordModal = React.memo(({
                                         onChangeText={(text) => {
                                             const formatted = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
                                             employeeIdValue.current = formatted;
-                                            // Force update the input value
                                             if (employeeIdRef.current) {
                                                 employeeIdRef.current.setNativeProps({ text: formatted });
                                             }
@@ -227,7 +235,7 @@ const ForgotPasswordModal = React.memo(({
                                 </View>
                             )}
 
-                            {/* Step 2: OTP and New Password - UNCONTROLLED INPUTS */}
+                            {/* Step 2: OTP and New Password */}
                             {step === 2 && (
                                 <>
                                     <View style={styles.inputContainer}>
@@ -403,7 +411,11 @@ const Login = () => {
     const [showHolidays, setShowHolidays] = useState(false);
     const [showUpdates, setShowUpdates] = useState(false);
 
-    const navigation = useNavigation<NavigationProp>();
+    // Announcements state - fetched from API
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+
+    const navigation = useNavigation() as any;
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     // Refs for main login inputs
@@ -424,11 +436,32 @@ const Login = () => {
         { date: 'REGIONAL', day: 'CHOOSE ONE', occasion: 'REGIONAL HOLIDAY (TELUGU NEW YEAR / GOOD FRIDAY / BAKRID / CHRISTMAS)' }
     ], []);
 
-    const [todaysUpdates, _setTodaysUpdates] = useState([
-        { id: '1', title: 'Company Meeting', description: 'All employees meeting at 10 AM', time: 'Today 10:00 AM', priority: 'high' as const },
-        { id: '2', title: 'Project Deadline', description: 'Q1 project submissions due', time: 'Mar 15, 2026', priority: 'high' as const },
-        { id: '3', title: 'Training Session', description: 'New software training', time: 'Mar 20, 2026', priority: 'medium' as const },
-    ]);
+    // Fetch announcements from API on component mount
+    useEffect(() => {
+        fetchAnnouncements();
+    }, []);
+
+    const fetchAnnouncements = async () => {
+        try {
+            setLoadingAnnouncements(true);
+            const response = await authAPI.announcement.getActive();
+            const data = response.data || [];
+            const mapped = data.map((a: any) => ({
+                _id: a._id || String(Math.random()),
+                title: a.title || 'Update',
+                message: a.message || a.description || '',
+                startDate: a.startDate,
+                endDate: a.endDate,
+                priority: a.priority || 'medium'
+            }));
+            setAnnouncements(mapped);
+        } catch (error) {
+            console.error('Error fetching announcements:', error);
+            setAnnouncements([]);
+        } finally {
+            setLoadingAnnouncements(false);
+        }
+    };
 
     useEffect(() => {
         Animated.timing(fadeAnim, {
@@ -486,7 +519,7 @@ const Login = () => {
         setIsSendingOtp(true);
 
         try {
-            const response = await authAPI.forgotPassword({ 
+            await authAPI.forgotPassword({ 
                 employeeId 
             });
 
@@ -495,6 +528,7 @@ const Login = () => {
             setCanResendOtp(false);
         } catch (error: any) {
             console.error('Send OTP error:', error);
+            Alert.alert('Error', error.response?.data?.message || 'Failed to send OTP');
         } finally {
             setIsSendingOtp(false);
         }
@@ -506,7 +540,7 @@ const Login = () => {
         setIsSendingOtp(true);
 
         try {
-            const response = await authAPI.forgotPassword({ 
+            await authAPI.forgotPassword({ 
                 employeeId 
             });
 
@@ -514,6 +548,7 @@ const Login = () => {
             setCanResendOtp(false);
         } catch (error: any) {
             console.error('Resend OTP error:', error);
+            Alert.alert('Error', error.response?.data?.message || 'Failed to resend OTP');
         } finally {
             setIsSendingOtp(false);
         }
@@ -523,12 +558,12 @@ const Login = () => {
         setIsResetting(true);
 
         try {
-            const response = await authAPI.resetPassword({
-                token: otp,
-                password
+            await authAPI.resetPassword({
+                employeeId: forgotEmployeeIdRef.current,
+                otp: otp,
+                newPassword: password
             });
 
-            // Show success and close modal
             Alert.alert('Success', 'Password reset successfully. Please login with your new password.');
             setShowForgotPassword(false);
             setForgotPasswordStep(1);
@@ -654,7 +689,7 @@ const Login = () => {
         </Modal>
     ), [showHolidays, holidays2026]);
 
-    // Updates Modal Component
+    // Updates Modal Component - Now fetches from API
     const UpdatesModal = useMemo(() => () => (
         <Modal
             visible={showUpdates}
@@ -675,21 +710,30 @@ const Login = () => {
                     </View>
 
                     <ScrollView showsVerticalScrollIndicator={false}>
-                        {todaysUpdates.length === 0 ? (
+                        {loadingAnnouncements ? (
+                            <View style={styles.loadingAnnouncements}>
+                                <ActivityIndicator size="small" color={COLORS.primary} />
+                                <Text style={styles.loadingAnnouncementsText}>Loading updates...</Text>
+                            </View>
+                        ) : announcements.length === 0 ? (
                             <View style={styles.emptyUpdates}>
                                 <Text style={styles.emptyUpdatesText}>No upcoming events</Text>
                             </View>
                         ) : (
-                            todaysUpdates.map((update) => (
-                                <View key={update.id} style={styles.updateCard}>
+                            announcements.map((update) => (
+                                <View key={update._id} style={styles.updateCard}>
                                     <View style={[
                                         styles.updatePriorityDot,
                                         { backgroundColor: update.priority === 'high' ? '#FF4444' : '#4CAF50' }
                                     ]} />
                                     <View style={styles.updateContent}>
                                         <Text style={styles.updateTitle}>{update.title}</Text>
-                                        <Text style={styles.updateDescription}>{update.description}</Text>
-                                        <Text style={styles.updateTime}>{update.time}</Text>
+                                        <Text style={styles.updateDescription}>{update.message}</Text>
+                                        {update.startDate && (
+                                            <Text style={styles.updateTime}>
+                                                {new Date(update.startDate).toLocaleDateString()}
+                                            </Text>
+                                        )}
                                     </View>
                                 </View>
                             ))
@@ -702,7 +746,7 @@ const Login = () => {
                 </View>
             </View>
         </Modal>
-    ), [showUpdates, todaysUpdates]);
+    ), [showUpdates, announcements, loadingAnnouncements]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -1210,6 +1254,15 @@ const styles = StyleSheet.create({
     },
     updatesModalContent: {
         maxWidth: 400,
+    },
+    loadingAnnouncements: {
+        padding: 40,
+        alignItems: 'center',
+    },
+    loadingAnnouncementsText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: COLORS.gray,
     },
     holidaysGrid: {
         padding: 16,
