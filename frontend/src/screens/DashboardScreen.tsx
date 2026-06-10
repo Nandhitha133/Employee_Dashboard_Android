@@ -21,6 +21,7 @@ import IconCommunity from 'react-native-vector-icons/MaterialCommunityIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CommonFooter from '../components/CommonFooter';
 import { useSidebar } from '../context/SidebarContext';
 
@@ -89,7 +90,7 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-// Colors - Dark blue as requested
+// Colors
 const COLORS = {
   primary: '#0A0F2C',
   secondary: '#1A237E',
@@ -129,13 +130,10 @@ interface Module {
   permission?: string;
   showForRoles?: string[];
   allowEmployeeRole?: boolean;
-  hasDropdown?: boolean;
-  children?: Module[];
-  order?: number; // For sidebar ordering
-  employeeOnly?: boolean; // Flag to indicate this module should only show for employees
+  order?: number;
 }
 
-// Category Images - Keeping Unsplash images
+// Category Images
 const categoryImages: Record<string, string> = {
   'Work & Productivity': 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&q=80&w=1000',
   'Leave Management': 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=1000',
@@ -163,17 +161,11 @@ const DashboardScreen = () => {
   // Get user from route params
   const user: User | undefined = routeParams?.user;
 
-  // Debug user object
-  console.log('Dashboard - User:', user);
-  
-  // Normalize role - check for various possible role values
+  // Normalize role
   let role = user?.role?.toLowerCase() || 'employees';
-  // Handle project_manager -> projectmanager
   if (role === 'project_manager') role = 'projectmanager';
-  console.log('Dashboard - Original role:', user?.role, 'Normalized role:', role);
   
   const permissions = user?.permissions || [];
-  console.log('Dashboard - Permissions:', permissions);
 
   // Update time
   useEffect(() => {
@@ -196,14 +188,12 @@ const DashboardScreen = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch dashboard stats (mock for now - replace with actual API)
   useEffect(() => {
     fetchDashboardStats();
   }, []);
 
   const fetchDashboardStats = async () => {
     try {
-      // Mock data - replace with actual API calls
       setProfile(user || null);
       setAnnouncements([]);
     } catch (error) {
@@ -217,779 +207,95 @@ const DashboardScreen = () => {
     setRefreshing(false);
   };
 
-  // Employee-specific modules list based on requirements
-  const employeeModulesList = [
-    'Home',
-    'My Profile',
-    'Timesheet',
-    'Employee Attendance',
-    'Self Appraisal',
-    'Leave Applications',
-    'Policy Portal',
-    'Salary Slips',
-    'Employee Exit Form',
-    'Unified Hub Calendar'
-  ];
-
-  // Complete modules list with exact sidebar order
+  // Complete modules list with all sub-modules flattened - matching the image
   const modules: Module[] = [
-    // 1. Home
-    { 
-      name: 'Home', 
-      description: 'Go to dashboard', 
-      screen: 'Home', 
-      icon: 'home', 
-      category: 'Main', 
-      allowEmployeeRole: true,
-      order: 1
-    },
+    // ========== Work & Productivity ==========
+    { name: 'Timesheet', description: 'Log work hours', screen: 'Timesheet', icon: 'clock-outline', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', allowEmployeeRole: true, order: 1 },
+    { name: 'Timesheet History', description: 'View past timesheets', screen: 'TimesheetHistory', icon: 'history', iconFamily: 'MaterialIcons', category: 'Work & Productivity', allowEmployeeRole: true, order: 2 },
+    { name: 'Attendance Regularization', description: 'Regularize attendance', screen: 'AttendanceRegularization', icon: 'calendar-clock', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', allowEmployeeRole: true, order: 3 },
+    { name: 'Employee Attendance', description: 'Attendance tracking', screen: 'EmployeeAttendance', icon: 'clock-outline', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', permission: 'attendance_access', showForRoles: ['admin', 'hr', 'manager'], allowEmployeeRole: true, order: 4 },
+    { name: 'Admin Timesheet', description: 'Review and approve timesheets', screen: 'AdminTimesheet', icon: 'assignment', iconFamily: 'MaterialIcons', category: 'Work & Productivity', permission: 'admin_timesheet_access', showForRoles: ['admin', 'hr', 'manager'], order: 5 },
+    { name: 'Timesheet Summary', description: 'Overview of submissions', screen: 'TimesheetSummary', icon: 'assessment', iconFamily: 'MaterialIcons', category: 'Work & Productivity', permission: 'admin_timesheet_access', showForRoles: ['admin', 'hr', 'manager'], order: 6 },
+    { name: 'Edit In and Out Time', description: 'Modify attendance timings', screen: 'EditInOutTime', icon: 'clock-edit', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', permission: 'edit_attendance', showForRoles: ['admin', 'hr', 'manager'], order: 7 },
+    { name: 'Special Permission', description: 'Approve special attendance permissions', screen: 'SpecialPermission', icon: 'shield-check', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', permission: 'special_permission', showForRoles: ['admin', 'hr', 'manager', 'projectmanager'], order: 8 },
+    { name: 'Attendance Approval', description: 'Review and approve attendance', screen: 'AttendanceApproval', icon: 'check-circle', iconFamily: 'MaterialIcons', category: 'Work & Productivity', permission: 'attendance_access', showForRoles: ['admin', 'hr', 'manager', 'projectmanager'], order: 9 },
+    { name: 'Project Allocation', description: 'Assign employees to projects', screen: 'ProjectAllocation', icon: 'assignment-ind', iconFamily: 'MaterialIcons', category: 'Work & Productivity', showForRoles: ['admin', 'projectmanager', 'manager'], allowEmployeeRole: false, order: 10 },
+    { name: 'Unified Hub Calendar', description: 'View holidays & celebrations', screen: 'UnifiedHubCalendar', icon: 'calendar', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', permission: 'celebration_view', allowEmployeeRole: true, order: 11 },
     
-    // 2. My Profile
-    { 
-      name: 'My Profile', 
-      description: 'View your profile', 
-      screen: 'MyProfile', 
-      icon: 'account-circle', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Main', 
-      allowEmployeeRole: true,
-      order: 2
-    },
+    // ========== Leave Management ==========
+    { name: 'Leave Summary', description: 'View leave summary', screen: 'LeaveSummary', icon: 'chart-bar', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_view', showForRoles: ['admin', 'hr', 'manager'], order: 12 },
+    { name: 'Leave Balance', description: 'Check leave balance', screen: 'LeaveBalance', icon: 'wallet', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_view', allowEmployeeRole: true, order: 13 },
+    { name: 'Leave Applications', description: 'Apply & track leaves', screen: 'LeaveApplications', icon: 'calendar-check', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_access', allowEmployeeRole: true, order: 14 },
+    { name: 'Regional Holiday', description: 'View regional holidays', screen: 'RegionalHoliday', icon: 'calendar-star', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', allowEmployeeRole: true, order: 15 },
     
-    // 3. Timesheet with submodules
-    {
-      name: 'Timesheet',
-      description: 'Log work hours',
-      screen: 'Timesheet',
-      icon: 'clock-outline',
-      iconFamily: 'MaterialCommunityIcons',
-      category: 'Work & Productivity',
-      allowEmployeeRole: true,
-      hasDropdown: true,
-      order: 3,
-      children: [
-        { 
-          name: 'Timesheet', 
-          description: 'Log work hours', 
-          screen: 'Timesheet', 
-          icon: 'clock-outline', 
-          iconFamily: 'MaterialCommunityIcons',
-          category: 'Work & Productivity',
-          allowEmployeeRole: true 
-        },
-        { 
-          name: 'Timesheet History', 
-          description: 'View past timesheets', 
-          screen: 'TimesheetHistory', 
-          icon: 'history', 
-          iconFamily: 'MaterialIcons',
-          category: 'Work & Productivity',
-          allowEmployeeRole: true 
-        },
-        { 
-          name: 'Attendance Regularization', 
-          description: 'Regularize attendance', 
-          screen: 'AttendanceRegularization', 
-          icon: 'calendar-clock', 
-          iconFamily: 'MaterialCommunityIcons',
-          category: 'Work & Productivity',
-          allowEmployeeRole: true 
-        },
-      ],
-    },
+    // ========== Company & Resources ==========
+    { name: 'Insurance', description: 'Manage health & life insurance', screen: 'Insurance', icon: 'shield', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'insurance_access', allowEmployeeRole: true, order: 16 },
+    { name: 'Policy Portal', description: 'Company rules & documents', screen: 'PolicyPortal', icon: 'file-document', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', allowEmployeeRole: true, order: 17 },
+    { name: 'Resume Repository', description: 'Central resume repository', screen: 'ResumeRepository', icon: 'file-multiple', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'resume_access', showForRoles: ['admin', 'hr'], order: 18 },
+    { name: 'Exit Form', description: 'Submit exit form', screen: 'EmployeeExitForm', icon: 'exit-run', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'exit_form_access', allowEmployeeRole: true, order: 19 },
+    { name: 'Exit Approval', description: 'Review and approve exit forms', screen: 'ExitApproval', icon: 'check-circle', iconFamily: 'MaterialIcons', category: 'Company & Resources', permission: 'exit_approval_access', showForRoles: ['admin', 'hr', 'manager'], order: 20 },
+    { name: 'Employee Reward Tracker', description: 'Track rewards', screen: 'EmployeeRewardTracker', icon: 'trophy', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'reward_access', showForRoles: ['admin', 'hr', 'manager'], order: 21 },
+    { name: 'Employee Management', description: 'View and manage employees', screen: 'EmployeeManagement', icon: 'account-group', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'employee_access', showForRoles: ['admin', 'hr'], order: 22 },
+    { name: 'User Access', description: 'Manage user roles & permissions', screen: 'UserAccess', icon: 'lock', iconFamily: 'MaterialIcons', category: 'Company & Resources', permission: 'user_access', showForRoles: ['admin'], order: 23 },
+    { name: 'Team Management', description: 'Manage teams', screen: 'TeamManagement', icon: 'account-multiple', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'team_access', showForRoles: ['admin', 'manager'], order: 24 },
+    { name: 'Internships', description: 'Manage interns & references', screen: 'Internships', icon: 'school', iconFamily: 'MaterialIcons', category: 'Company & Resources', permission: 'intern_reference', showForRoles: ['admin', 'hr', 'manager'], order: 25 },
+    { name: 'Announcements', description: 'Manage company announcements', screen: 'Announcements', icon: 'bullhorn', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'announcement_manage', showForRoles: ['admin', 'hr', 'manager'], order: 26 },
     
-    // 4. Employee Attendance
-    { 
-      name: 'Employee Attendance', 
-      description: 'Attendance tracking', 
-      screen: 'EmployeeAttendance', 
-      icon: 'clock-outline', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Work & Productivity', 
-      permission: 'attendance_access', 
-      showForRoles: ['admin', 'hr', 'manager'],
-      allowEmployeeRole: true,
-      order: 4
-    },
+    // ========== Finance & Payroll ==========
+    { name: 'Salary Slips', description: 'View payslips', screen: 'SalarySlips', icon: 'file-document-outline', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', allowEmployeeRole: true, order: 27 },
+    { name: 'Payroll Details', description: 'Manage payroll details', screen: 'PayrollDetails', icon: 'receipt', iconFamily: 'MaterialIcons', category: 'Finance & Payroll', permission: 'payroll_manage', showForRoles: ['admin', 'hr', 'finance'], order: 28 },
+    { name: 'Compensation Master', description: 'Manage employee compensation', screen: 'CompensationMaster', icon: 'cog', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'compensation_master', showForRoles: ['admin', 'hr', 'finance'], order: 29 },
+    { name: 'Cost to the Company', description: 'View CTC', screen: 'CTC', icon: 'currency-inr', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'payroll_view', showForRoles: ['admin', 'hr', 'finance'], order: 30 },
+    { name: 'Loan Summary', description: 'View loans', screen: 'LoanSummary', icon: 'bank', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'loan_view', showForRoles: ['admin', 'hr', 'finance'], order: 31 },
+    { name: 'Gratuity Summary', description: 'View gratuity', screen: 'GratuitySummary', icon: 'gift', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'gratuity_view', showForRoles: ['admin', 'hr', 'finance'], order: 32 },
+    { name: 'Monthly Payroll', description: 'Process monthly payroll', screen: 'MonthlyPayroll', icon: 'calendar-month', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'payroll_access', showForRoles: ['admin', 'hr', 'finance'], order: 33 },
+    { name: 'Marriage Allowance', description: 'Manage marriage allowance claims', screen: 'MarriageAllowance', icon: 'heart', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'marriage_allowance', showForRoles: ['admin', 'hr', 'finance'], order: 34 },
+    { name: 'Holiday Allowance', description: 'Manage holiday working allowances', screen: 'HolidaysAllowance', icon: 'beach', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'holiday_allowance', showForRoles: ['admin', 'hr', 'manager'], order: 35 },
+    { name: 'Expenditure Management', description: 'Track company expenses', screen: 'Expenditure', icon: 'cash', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'expenditure_access', showForRoles: ['admin', 'hr', 'finance'], order: 36 },
+    { name: 'PF & Gratuity Summary', description: 'View PF and gratuity summary', screen: 'PFGratuitySummary', icon: 'file-document-outline', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'payroll_view', showForRoles: ['admin', 'hr', 'finance'], order: 37 },
     
-    // 5. Attendance Approval
-    { 
-      name: 'Attendance Approval', 
-      description: 'Review and approve attendance', 
-      screen: 'AttendanceApproval', 
-      icon: 'check-circle', 
-      iconFamily: 'MaterialIcons',
-      category: 'Work & Productivity',
-      permission: 'attendance_access',
-      showForRoles: ['admin', 'hr', 'manager', 'projectmanager'],
-      order: 5
-    },
+    // ========== Performance Management ==========
+    { name: 'Self Appraisal', description: 'Submit self appraisal', screen: 'SelfAppraisal', icon: 'star', iconFamily: 'MaterialCommunityIcons', category: 'Performance Management', permission: 'self_appraisal', allowEmployeeRole: true, order: 38 },
+    { name: 'Team Appraisal', description: 'Review team performance', screen: 'TeamAppraisal', icon: 'groups', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'team_appraisal', showForRoles: ['admin', 'hr', 'manager', 'projectmanager'], order: 39 },
+    { name: 'Reviewer Approval', description: 'Approve appraisals', screen: 'ReviewerApproval', icon: 'check-circle', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'reviewer_approval', showForRoles: ['admin', 'hr', 'manager', 'projectmanager'], order: 40 },
+    { name: 'Director Approval', description: 'Final approval', screen: 'DirectorApproval', icon: 'verified', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'director_approval', showForRoles: ['admin', 'hr', 'manager', 'director'], order: 41 },
+    { name: 'Appraisal Workflow', description: 'Track appraisal status', screen: 'AppraisalWorkflow', icon: 'timeline', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'appraisal_workflow', allowEmployeeRole: true, order: 42 },
+    { name: 'Appraisal Master', description: 'Manage employee appraisals', screen: 'AppraisalMaster', icon: 'trending-up', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'appraisal_master', showForRoles: ['admin', 'hr'], order: 43 },
+    { name: 'Increment Summary', description: 'View increment summary', screen: 'IncrementSummary', icon: 'summarize', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'increment_summary', showForRoles: ['admin', 'hr', 'manager'], order: 44 },
+    { name: 'Attendance Summary', description: 'View attendance summary', screen: 'AttendanceSummary', icon: 'clock-check', iconFamily: 'MaterialCommunityIcons', category: 'Performance Management', permission: 'attendance_summary', showForRoles: ['admin', 'hr', 'manager'], order: 45 },
     
-    // 6. Admin Timesheet with submodules
-    {
-      name: 'Admin Timesheet',
-      description: 'Admin Timesheet Management',
-      screen: 'AdminTimesheet',
-      icon: 'folder',
-      iconFamily: 'MaterialCommunityIcons',
-      category: 'Work & Productivity',
-      permission: 'admin_timesheet_access',
-      showForRoles: ['admin', 'hr', 'manager'],
-      hasDropdown: true,
-      order: 6,
-      children: [
-        { 
-          name: 'Admin Timesheet', 
-          description: 'Review and approve timesheets', 
-          screen: 'AdminTimesheet', 
-          icon: 'assignment', 
-          iconFamily: 'MaterialIcons',
-          category: 'Work & Productivity',
-          showForRoles: ['admin', 'hr', 'manager'] 
-        },
-        { 
-          name: 'Timesheet Summary', 
-          description: 'Overview of submissions', 
-          screen: 'TimesheetSummary', 
-          icon: 'assessment', 
-          iconFamily: 'MaterialIcons',
-          category: 'Work & Productivity',
-          showForRoles: ['admin', 'hr', 'manager'] 
-        },
-        { 
-          name: 'Special Permission', 
-          description: 'Approve special attendance permissions', 
-          screen: 'SpecialPermission', 
-          icon: 'shield-check', 
-          iconFamily: 'MaterialCommunityIcons',
-          category: 'Work & Productivity',
-          permission: 'special_permission',
-          showForRoles: ['admin', 'hr', 'manager', 'projectmanager'] 
-        },
-      ],
-    },
-    
-    // 7. Project Allocation - NOT visible for employees
-    { 
-      name: 'Project Allocation', 
-      description: 'Assign employees to projects', 
-      screen: 'ProjectAllocation', 
-      icon: 'assignment-ind', 
-      iconFamily: 'MaterialIcons',
-      category: 'Work & Productivity', 
-      showForRoles: ['admin', 'projectmanager', 'manager'],
-      allowEmployeeRole: false, // Explicitly set to false for employees
-      order: 7
-    },
-    
-    // 8. Performance Management with submodules
-    {
-      name: 'Performance Management',
-      description: 'Performance Management',
-      screen: 'PerformanceManagementFolder',
-      icon: 'star',
-      iconFamily: 'MaterialCommunityIcons',
-      category: 'Performance Management',
-      hasDropdown: true,
-      order: 8,
-      children: [
-        { 
-          name: 'Self Appraisal', 
-          description: 'Submit self appraisal', 
-          screen: 'SelfAppraisal', 
-          icon: 'star', 
-          iconFamily: 'MaterialCommunityIcons',
-          category: 'Performance Management',
-          permission: 'self_appraisal',
-          allowEmployeeRole: true 
-        },
-        { 
-          name: 'Team Appraisal', 
-          description: 'Review team performance', 
-          screen: 'TeamAppraisal', 
-          icon: 'groups', 
-          iconFamily: 'MaterialIcons',
-          category: 'Performance Management',
-          permission: 'team_appraisal',
-          showForRoles: ['admin', 'hr', 'manager', 'projectmanager'] 
-        },
-        { 
-          name: 'Reviewer Approval', 
-          description: 'Approve appraisals', 
-          screen: 'ReviewerApproval', 
-          icon: 'check-circle', 
-          iconFamily: 'MaterialIcons',
-          category: 'Performance Management',
-          permission: 'reviewer_approval',
-          showForRoles: ['admin', 'hr', 'manager', 'projectmanager'] 
-        },
-        { 
-          name: 'Director Approval', 
-          description: 'Final approval', 
-          screen: 'DirectorApproval', 
-          icon: 'verified', 
-          iconFamily: 'MaterialIcons',
-          category: 'Performance Management',
-          permission: 'director_approval',
-          showForRoles: ['admin', 'hr', 'manager', 'director'] 
-        },
-        { 
-          name: 'Appraisal Workflow', 
-          description: 'Track appraisal status', 
-          screen: 'AppraisalWorkflow', 
-          icon: 'timeline', 
-          iconFamily: 'MaterialIcons',
-          category: 'Performance Management',
-          permission: 'appraisal_workflow',
-          allowEmployeeRole: true 
-        },
-        { 
-          name: 'Appraisal Master', 
-          description: 'Manage employee appraisals', 
-          screen: 'AppraisalMaster', 
-          icon: 'trending-up', 
-          iconFamily: 'MaterialIcons',
-          category: 'Performance Management',
-          permission: 'appraisal_master',
-          showForRoles: ['admin', 'hr'] 
-        },
-        { 
-          name: 'Increment Summary', 
-          description: 'View increment summary', 
-          screen: 'IncrementSummary', 
-          icon: 'summarize', 
-          iconFamily: 'MaterialIcons',
-          category: 'Performance Management',
-          permission: 'increment_summary',
-          showForRoles: ['admin', 'hr', 'manager'] 
-        },
-        { 
-          name: 'Attendance Summary', 
-          description: 'View attendance summary', 
-          screen: 'AttendanceSummary', 
-          icon: 'clock-check', 
-          iconFamily: 'MaterialCommunityIcons',
-          category: 'Performance Management',
-          permission: 'attendance_summary',
-          showForRoles: ['admin', 'hr', 'manager'] 
-        },
-      ],
-    },
-    
-    // 9. Leave Management with submodules
-    {
-      name: 'Leave Management',
-      description: 'Leave Management',
-      screen: 'LeaveManagementFolder',
-      icon: 'folder',
-      iconFamily: 'MaterialIcons',
-      category: 'Leave Management',
-      hasDropdown: true,
-      order: 9,
-      children: [
-        { 
-          name: 'Leave Summary', 
-          description: 'View leave summary', 
-          screen: 'LeaveSummary', 
-          icon: 'chart-bar', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Leave Management',
-          permission: 'leave_view', 
-          showForRoles: ['admin', 'hr', 'manager'] 
-        },
-        { 
-          name: 'Regional Holiday', 
-          description: 'View regional holidays', 
-          screen: 'RegionalHoliday', 
-          icon: 'calendar-star', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Leave Management',
-          allowEmployeeRole: true 
-        },
-        { 
-          name: 'Leave Balance', 
-          description: 'Check leave balance', 
-          screen: 'LeaveBalance', 
-          icon: 'wallet', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Leave Management',
-          permission: 'leave_view',
-          allowEmployeeRole: true 
-        },
-      ],
-    },
-    
-    // 10. Leave Applications
-    { 
-      name: 'Leave Applications', 
-      description: 'Apply & track leaves', 
-      screen: 'LeaveApplications', 
-      icon: 'calendar-check', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Leave Management', 
-      permission: 'leave_access', 
-      allowEmployeeRole: true,
-      order: 10
-    },
-    
-    // 11. Insurance
-    { 
-      name: 'Insurance', 
-      description: 'Manage health & life insurance', 
-      screen: 'Insurance', 
-      icon: 'shield', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'insurance_access', 
-      allowEmployeeRole: true,
-      order: 11
-    },
-    
-    // 12. Policy Portal
-    { 
-      name: 'Policy Portal', 
-      description: 'Company rules & documents', 
-      screen: 'PolicyPortal', 
-      icon: 'file-document', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      allowEmployeeRole: true,
-      order: 12
-    },
-    
-    // 13. Salary Slips
-    { 
-      name: 'Salary Slips', 
-      description: 'View payslips', 
-      screen: 'SalarySlips', 
-      icon: 'file-document-outline', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Finance & Payroll', 
-      allowEmployeeRole: true,
-      order: 13
-    },
-    
-    // 14. Payroll Management with submodules
-    {
-      name: 'Payroll Management',
-      description: 'Payroll Management',
-      screen: 'PayrollManagementFolder',
-      icon: 'folder',
-      iconFamily: 'MaterialIcons',
-      category: 'Finance & Payroll',
-      hasDropdown: true,
-      order: 14,
-      children: [
-        { 
-          name: 'Payroll Details', 
-          description: 'Manage payroll details', 
-          screen: 'PayrollDetails', 
-          icon: 'receipt', 
-          iconFamily: 'MaterialIcons',
-          category: 'Finance & Payroll',
-          permission: 'payroll_manage', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'Cost to the Company', 
-          description: 'View CTC', 
-          screen: 'CTC', 
-          icon: 'currency-inr', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'payroll_view', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'Compensation Master', 
-          description: 'Manage employee compensation', 
-          screen: 'CompensationMaster', 
-          icon: 'cog', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'compensation_master', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'Loan Summary', 
-          description: 'View loans', 
-          screen: 'LoanSummary', 
-          icon: 'bank', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'loan_view', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'Gratuity Summary', 
-          description: 'View gratuity', 
-          screen: 'GratuitySummary', 
-          icon: 'gift', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'gratuity_view', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'Monthly Payroll', 
-          description: 'Process monthly payroll', 
-          screen: 'MonthlyPayroll', 
-          icon: 'calendar-month', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'payroll_access', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'Marriage Allowance', 
-          description: 'Manage marriage allowance claims', 
-          screen: 'MarriageAllowance', 
-          icon: 'heart', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'marriage_allowance', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-        { 
-          name: 'PF & Gratuity Summary', 
-          description: 'View PF and gratuity summary', 
-          screen: 'PFGratuitySummary', 
-          icon: 'file-document-outline', 
-          iconFamily: 'MaterialCommunityIcons', 
-          category: 'Finance & Payroll',
-          permission: 'payroll_view', 
-          showForRoles: ['admin', 'hr', 'finance'] 
-        },
-      ],
-    },
-    
-    // 15. Expenditure Management
-    { 
-      name: 'Expenditure Management', 
-      description: 'Track company expenses', 
-      screen: 'Expenditure', 
-      icon: 'cash', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Finance & Payroll', 
-      permission: 'expenditure_access', 
-      showForRoles: ['admin', 'hr', 'finance'],
-      order: 15
-    },
-    
-    // 16. Announcements
-    { 
-      name: 'Announcements', 
-      description: 'Manage company announcements', 
-      screen: 'Announcements', 
-      icon: 'bullhorn', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'announcement_manage', 
-      showForRoles: ['admin', 'hr', 'manager'],
-      order: 16
-    },
-    
-    // 17. Internships
-    { 
-      name: 'Internships', 
-      description: 'Manage interns & references', 
-      screen: 'Internships', 
-      icon: 'school', 
-      iconFamily: 'MaterialIcons',
-      category: 'Company & Resources', 
-      permission: 'intern_reference', 
-      showForRoles: ['admin', 'hr', 'manager'],
-      order: 17
-    },
-    
-    // 18. Resume Repository
-    { 
-      name: 'Resume Repository', 
-      description: 'Central resume repository', 
-      screen: 'ResumeRepository', 
-      icon: 'file-multiple', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'resume_access', 
-      showForRoles: ['admin', 'hr'],
-      order: 18
-    },
-    
-    // 19. Employee Exit Form
-    { 
-      name: 'Employee Exit Form', 
-      description: 'Submit exit form', 
-      screen: 'EmployeeExitForm', 
-      icon: 'exit-run', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'exit_form_access', 
-      allowEmployeeRole: true,
-      order: 19
-    },
-    
-    // 20. Exit Management with submodule
-    {
-      name: 'Exit Management',
-      description: 'Exit Management',
-      screen: 'ExitManagementFolder',
-      icon: 'exit-to-app',
-      iconFamily: 'MaterialIcons',
-      category: 'Company & Resources',
-      hasDropdown: true,
-      order: 20,
-      children: [
-        { 
-          name: 'Exit Approval', 
-          description: 'Review and approve exit forms', 
-          screen: 'ExitApproval', 
-          icon: 'check-circle', 
-          iconFamily: 'MaterialIcons',
-          category: 'Company & Resources', 
-          permission: 'exit_approval_access', 
-          showForRoles: ['admin', 'hr', 'manager'] 
-        },
-      ],
-    },
-    
-    // 21. Employee Reward Tracker
-    { 
-      name: 'Employee Reward Tracker', 
-      description: 'Track rewards', 
-      screen: 'EmployeeRewardTracker', 
-      icon: 'trophy', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'reward_access', 
-      showForRoles: ['admin', 'hr', 'manager'],
-      order: 21
-    },
-    
-    // 22. Holiday Allowance
-    { 
-      name: 'Holiday Allowance', 
-      description: 'Manage holiday working allowances', 
-      screen: 'HolidaysAllowance', 
-      icon: 'beach', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Finance & Payroll',
-      permission: 'holiday_allowance', 
-      showForRoles: ['admin', 'hr', 'manager'],
-      order: 22
-    },
-    
-    // 23. Employee Management
-    { 
-      name: 'Employee Management', 
-      description: 'View and manage employees', 
-      screen: 'EmployeeManagement', 
-      icon: 'account-group', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'employee_access', 
-      showForRoles: ['admin', 'hr'],
-      order: 23
-    },
-    
-    // 24. User Access
-    { 
-      name: 'User Access', 
-      description: 'Manage user roles & permissions', 
-      screen: 'UserAccess', 
-      icon: 'lock', 
-      iconFamily: 'MaterialIcons',
-      category: 'Company & Resources', 
-      permission: 'user_access', 
-      showForRoles: ['admin'],
-      order: 24
-    },
-    
-    // 25. Team Management
-    { 
-      name: 'Team Management', 
-      description: 'Manage teams', 
-      screen: 'TeamManagement', 
-      icon: 'account-multiple', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Company & Resources', 
-      permission: 'team_access', 
-      showForRoles: ['admin', 'manager'],
-      order: 25
-    },
-    
-    // 26. Edit In and Out Time
-    { 
-      name: 'Edit In and Out Time', 
-      description: 'Modify attendance timings', 
-      screen: 'EditInOutTime', 
-      icon: 'clock-edit', 
-      iconFamily: 'MaterialCommunityIcons',
-      category: 'Work & Productivity',
-      permission: 'edit_attendance',
-      showForRoles: ['admin', 'hr', 'manager'],
-      order: 26
-    },
-    
-    // 27. Unified Hub Calendar
-    { 
-      name: 'Unified Hub Calendar', 
-      description: 'View holidays & celebrations', 
-      screen: 'UnifiedHubCalendar', 
-      icon: 'calendar', 
-      iconFamily: 'MaterialCommunityIcons',
-      category: 'Work & Productivity', 
-      permission: 'celebration_view',
-      allowEmployeeRole: true,
-      order: 27
-    },
-
-    // Notifications (kept at end but not in order list)
-    { 
-      name: 'Notifications', 
-      description: 'View notifications', 
-      screen: 'Notifications', 
-      icon: 'bell', 
-      iconFamily: 'MaterialCommunityIcons', 
-      category: 'Notifications', 
-      allowEmployeeRole: true,
-      order: 99
-    },
+    // ========== Main ==========
+    { name: 'Home', description: 'Go to dashboard', screen: 'Home', icon: 'home', category: 'Main', allowEmployeeRole: true, order: 46 },
+    { name: 'My Profile', description: 'View your profile', screen: 'MyProfile', icon: 'account-circle', iconFamily: 'MaterialCommunityIcons', category: 'Main', allowEmployeeRole: true, order: 47 },
+    { name: 'Notifications', description: 'View notifications', screen: 'Notifications', icon: 'bell', iconFamily: 'MaterialCommunityIcons', category: 'Notifications', allowEmployeeRole: true, order: 48 },
   ];
-
-  // Function to check if a module should be visible for employee
-  const isEmployeeModuleVisible = (moduleName: string): boolean => {
-    // Admin sees everything
-    if (role === 'admin') return true;
-    
-    // For employees, check against the allowed list
-    if (role === 'employees' || role === 'employee') {
-      return employeeModulesList.includes(moduleName);
-    }
-    
-    // For other roles (manager, hr, etc.), use the existing logic
-    return true;
-  };
 
   // Filter modules based on user role and permissions
-  const filterModules = (items: Module[]): Module[] => {
-    // Admin can see everything
-    if (role === 'admin') {
-      console.log('Admin access - showing all modules');
-      return items;
-    }
-
-    console.log('Filtering modules for role:', role);
-    
-    const filtered = items.filter(item => {
-      // Always show Notifications
-      if (item.category === 'Notifications') {
-        return true;
-      }
-
-      // For employees, check if the module is in the allowed list
-      if (role === 'employees' || role === 'employee') {
-        // Check if module name is in employee allowed list
-        if (employeeModulesList.includes(item.name)) {
-          return true;
-        }
-        // For dropdown modules, we need to check children separately
-        if (item.hasDropdown && item.children) {
-          const hasVisibleChildren = item.children.some(child => 
-            employeeModulesList.includes(child.name)
-          );
-          return hasVisibleChildren;
-        }
-        return false;
-      }
-
-      // For other roles (manager, hr, etc.), use existing logic
-      // Check if item has showForRoles restriction
-      if (item.showForRoles && item.showForRoles.length > 0) {
-        if (item.showForRoles.includes(role)) {
-          return true;
-        }
-        if (role === 'employees' && item.allowEmployeeRole) {
-          return true;
-        }
-        return false;
-      }
-
-      // Check permission
-      if (item.permission && !permissions.includes(item.permission)) {
-        return false;
-      }
-
-      // For employees, check allowEmployeeRole
-      if (role === 'employees' && item.allowEmployeeRole !== true) {
-        return false;
-      }
-
-      return true;
-    });
-
-    console.log(`Filtered ${items.length} modules down to ${filtered.length} modules for role ${role}`);
-    return filtered;
-  };
-
-  // Filter dropdown children
-  const filterChildren = (children: Module[] | undefined): Module[] => {
-    if (!children) return [];
-    
-    return children.filter(child => {
+  const getVisibleModules = useMemo(() => {
+    let filtered = modules.filter(module => {
       // Admin sees everything
       if (role === 'admin') return true;
-
-      // For employees, only show "Self Appraisal" from Performance Management
-      if (role === 'employees' || role === 'employee') {
-        // Only show if the child is in the employee allowed list
-        return employeeModulesList.includes(child.name);
-      }
-
-      // For other roles, use existing logic
-      if (child.showForRoles && !child.showForRoles.includes(role)) {
+      
+      // Skip Main and Notifications for main content
+      if (module.category === 'Main' || module.category === 'Notifications') return false;
+      
+      // Check showForRoles
+      if (module.showForRoles && module.showForRoles.length > 0) {
+        if (module.showForRoles.includes(role)) return true;
+        if (role === 'employees' && module.allowEmployeeRole) return true;
         return false;
       }
-
-      if (child.permission && !permissions.includes(child.permission)) {
-        return false;
-      }
-
-      if (role === 'employees' && !child.allowEmployeeRole) {
-        return false;
-      }
-
-      return true;
-    });
-  };
-
-  // Create a processed version of modules with filtered children
-  const getProcessedModules = useMemo(() => {
-    return modules.map(module => {
-      if (module.hasDropdown && module.children) {
-        return {
-          ...module,
-          children: filterChildren(module.children)
-        };
-      }
-      return module;
-    });
-  }, [role, permissions]);
-
-  // Get filtered modules
-  const filteredModules = useMemo(() => filterModules(getProcessedModules), [role, permissions, getProcessedModules]);
-
-  // Filter modules based on search term and hide empty dropdowns
-  const getVisibleModules = useMemo(() => {
-    let filtered = filteredModules.filter(m => {
-      // Skip Main category modules (Home, My Profile)
-      if (m.category === 'Main') return false;
-      // Skip Notifications
-      if (m.category === 'Notifications') return false;
-      // For dropdown modules, only show if they have visible children
-      if (m.hasDropdown && m.children && m.children.length === 0) return false;
+      
+      // Check permission
+      if (module.permission && !permissions.includes(module.permission)) return false;
+      
+      // For employees, check allowEmployeeRole
+      if (role === 'employees' && module.allowEmployeeRole !== true) return false;
+      
       return true;
     });
     
+    // Filter by search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(m => 
@@ -1000,7 +306,7 @@ const DashboardScreen = () => {
     }
     
     return filtered;
-  }, [filteredModules, searchTerm]);
+  }, [role, permissions, searchTerm]);
 
   // Group modules by category
   const groupedModules = useMemo(() => {
@@ -1013,7 +319,7 @@ const DashboardScreen = () => {
     }, {});
   }, [getVisibleModules]);
 
-  // Toggle category
+  // Toggle category expansion
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev: any) => ({
       ...prev,
@@ -1025,12 +331,8 @@ const DashboardScreen = () => {
   const handleModulePress = (module: Module) => {
     if (module.screen === 'MyProfile') {
       navigation.navigate('MyProfile', { user: profile || user as User });
-    } else if (module.screen === 'Home' || module.screen === 'Dashboard') {
+    } else if (module.screen === 'Home') {
       // Already on home
-    } else if (module.hasDropdown && module.children && module.children.length > 0) {
-      // For folders, navigate to the first child screen
-      const firstChild = module.children[0];
-      navigation.navigate(firstChild.screen as any);
     } else {
       navigation.navigate(module.screen as any);
     }
@@ -1043,7 +345,28 @@ const DashboardScreen = () => {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', onPress: () => navigation.replace('Login') }
+        { 
+          text: 'Logout', 
+          onPress: async () => {
+            try {
+              // Clear essential auth data
+              await AsyncStorage.multiRemove(['token', 'user']);
+              
+              // Reset navigation to Login screen
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' as any }],
+              });
+            } catch (error) {
+              console.error('Error during logout:', error);
+              // Fallback navigation
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' as any }],
+              });
+            }
+          } 
+        }
       ]
     );
   };
@@ -1118,7 +441,6 @@ const DashboardScreen = () => {
 
   const categories = Object.keys(groupedModules);
 
-  // If no user, don't render
   if (!user) {
     return null;
   }
@@ -1391,47 +713,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 80,
   },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  profileCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  profileAvatarText: {
-    fontSize: 20,
-    color: COLORS.white,
-    fontWeight: 'bold',
-  },
-  profileCardName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  profileCardDesignation: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
   categoryCard: {
     marginBottom: 20,
   },
@@ -1565,115 +846,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 8,
   },
-  sidebarOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 1000,
-  },
-  sidebar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: width * 0.40,
-    backgroundColor: COLORS.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 5,
-    zIndex: 1001,
-  },
-  sidebarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: 50,
-    backgroundColor: COLORS.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
-  },
-  sidebarLogo: {
-    width: 120,
-    height: 120,
-  },
-  sidebarCloseButton: {
-    padding: 4,
-  },
-  sidebarContent: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  sidebarMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: COLORS.primary,
-  },
-  sidebarMenuIcon: {
-    width: 30,
-    alignItems: 'center',
-  },
-  sidebarMenuText: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.white,
-    fontWeight: '400',
-    marginLeft: 8,
-  },
-  sidebarSubMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingLeft: 54,
-    paddingRight: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-  },
-  sidebarSubMenuIcon: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  sidebarSubMenuText: {
-    flex: 1,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '400',
-  },
-  sidebarBadge: {
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  sidebarBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  sidebarEmptyContainer: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  sidebarEmptyText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  sidebarEmptySubText: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1713,7 +885,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
-  
   profileName: {
     fontSize: 20,
     fontWeight: '600',

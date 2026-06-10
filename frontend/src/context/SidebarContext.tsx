@@ -102,6 +102,7 @@ interface SidebarContextType {
   userPermissions: string[];
   closeSidebar: () => void;
   openSidebar: () => void;
+  clearUser: () => void;
 }
 
 // Employee-specific modules list (includes all sub-modules shown in the images)
@@ -927,6 +928,12 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const clearUser = () => {
+    setUser(null);
+    setUserRole('');
+    setUserPermissions([]);
+  };
+
   return (
     <SidebarContext.Provider
       value={{
@@ -938,6 +945,7 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
         userPermissions,
         closeSidebar,
         openSidebar,
+        clearUser,
       }}
     >
       {children}

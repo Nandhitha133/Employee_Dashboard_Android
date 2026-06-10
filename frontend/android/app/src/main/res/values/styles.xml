@@ -10,25 +10,35 @@
         <!-- Customize your theme here -->
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
         
-        <!-- Spinner/Dropdown Styles -->
+        <!-- Force light theme for spinners and their dropdowns -->
         <item name="android:spinnerItemStyle">@style/SpinnerItem</item>
         <item name="android:spinnerDropDownItemStyle">@style/SpinnerDropDownItem</item>
+        
+        <!-- Force light theme for dialogs (used by Picker mode="dialog") -->
+        <item name="android:alertDialogTheme">@style/LightAlertDialogTheme</item>
     </style>
 
-    <!-- Spinner Item Style (Selected Item) -->
-    <style name="SpinnerItem" parent="Theme.AppCompat.Light">
-        <item name="android:textColor">#2C3E50</item>
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textSize">14sp</item>
+    <!-- Spinner Item Style (The collapsed view) -->
+    <style name="SpinnerItem" parent="Widget.AppCompat.Spinner">
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+        <item name="android:textColor">#000000</item>
     </style>
 
-    <!-- Spinner Dropdown Item Style (Dropdown List Items) -->
+    <!-- Spinner Dropdown Item Style (The expanded list view) -->
     <style name="SpinnerDropDownItem" parent="Theme.AppCompat.Light">
-        <item name="android:textColor">#2C3E50</item>
-        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">#000000</item>
         <item name="android:background">#FFFFFF</item>
-        <item name="android:textSize">14sp</item>
         <item name="android:padding">12dp</item>
+    </style>
+
+    <!-- Custom theme for AlertDialogs to force white background -->
+    <style name="LightAlertDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:background">#FFFFFF</item>
+        <item name="android:textColor">#000000</item>
+        <item name="android:textColorPrimary">#000000</item>
+        <item name="android:colorAccent">#0A0F2C</item> <!-- Use your primary color -->
     </style>
 
 </resources>

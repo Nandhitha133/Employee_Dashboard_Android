@@ -27,14 +27,14 @@ const seedData = async () => {
     // Check if admin already exists
     let existingAdmin = await User.findOne({ email: 'admin@steel.com' });
     if (!existingAdmin) {
-      existingAdmin = await User.findOne({ email: 'admin@caldim.com' });
+      existingAdmin = await User.findOne({ email: 'nandhitharajunp@gmail.com' });
     }
     if (existingAdmin) {
       console.log('Admin user already exists. Updating permissions...');
 
       // Update existing admin with full permissions
       existingAdmin.permissions = [
-        'dashboard', 'user_access', 'employee_access', 'timesheet_access', 'project_access', 
+        'dashboard', 'user_access', 'employee_access', 'timesheet_access', 'project_access',
         'attendance_access', 'leave_access', 'leave_view', 'leave_approval', 'leave_manage'
       ];
       existingAdmin.role = 'admin';
@@ -57,12 +57,12 @@ const seedData = async () => {
     } else {
       // Create new admin user
       const adminUser = new User({
-        name: 'caldimAdmin',
-        email: 'admin@caldim.com',
-        password: 'admin123', // Will be hashed by the pre-save hook
+        name: 'Nandhitha',
+        email: 'nandhitharajunp@gmail.com',
+        password: 'Admin@123', // Will be hashed by the pre-save hook
         role: 'admin',
         permissions: [
-          'dashboard', 'user_access', 'employee_access', 'timesheet_access', 'project_access', 
+          'dashboard', 'user_access', 'employee_access', 'timesheet_access', 'project_access',
           'attendance_access', 'leave_access', 'leave_approval'
         ]
       });

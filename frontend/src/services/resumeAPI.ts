@@ -3,7 +3,9 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base URL configuration
-const API_BASE_URL = 'https://employee-react-main.onrender.com/api'; // Updated from localhost for production
+//const API_BASE_URL = 'https://employee-react-main.onrender.com/api'; // Updated from localhost for production
+// const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://10.69.57.248:5000/api';
 export const BASE_URL = API_BASE_URL.replace('/api', '');
 
 // Response interfaces

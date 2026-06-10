@@ -90,6 +90,9 @@ export const navigateToLogin = (): void => {
 
 // Environment-based configuration for Render
 const API_BASE_URL = 'https://employee-react-main.onrender.com/api';
+// const API_BASE_URL = 'http://localhost:5000/api';
+// const API_BASE_URL = 'http://192.168.1.78/api';
+
 
 // Create axios instance with increased timeout for Render cold starts
 const api: AxiosInstance = axios.create({

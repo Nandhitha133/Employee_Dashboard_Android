@@ -369,16 +369,17 @@ const TimesheetHistoryScreen: React.FC = () => {
         XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.substring(0, 31));
       });
       
-      const wbout = XLSX.write(workbook, { type: 'binary', bookType: 'xlsx' });
-      const fileName = `Timesheet_Weekly_${new Date().toISOString().split('T')[0]}.xlsx`;
-      const filePath = RNFS.DocumentDirectoryPath + '/' + fileName;
+      const base64Data = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
+      const fileName = `Timesheet_Weekly_${new Date().getTime()}.xlsx`;
+      const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
       
-      await RNFS.writeFile(filePath, wbout, 'ascii');
+      await RNFS.writeFile(filePath, base64Data, 'base64');
       
       await Share.open({
-        url: 'file://' + filePath,
+        url: `file://${filePath}`,
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        title: 'Share Timesheet Report',
+        filename: fileName,
+        title: 'Share Weekly Timesheet Report',
       });
       
       showMessage('Success', 'Excel file generated successfully', 'success');
@@ -440,16 +441,17 @@ const TimesheetHistoryScreen: React.FC = () => {
         XLSX.utils.book_append_sheet(workbook, worksheet, monthYear.substring(0, 31));
       });
       
-      const wbout = XLSX.write(workbook, { type: 'binary', bookType: 'xlsx' });
-      const fileName = `Timesheet_Monthly_${new Date().toISOString().split('T')[0]}.xlsx`;
-      const filePath = RNFS.DocumentDirectoryPath + '/' + fileName;
+      const base64Data = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
+      const fileName = `Timesheet_Monthly_${new Date().getTime()}.xlsx`;
+      const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
       
-      await RNFS.writeFile(filePath, wbout, 'ascii');
+      await RNFS.writeFile(filePath, base64Data, 'base64');
       
       await Share.open({
-        url: 'file://' + filePath,
+        url: `file://${filePath}`,
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        title: 'Share Timesheet Report',
+        filename: fileName,
+        title: 'Share Monthly Timesheet Report',
       });
       
       showMessage('Success', 'Excel file generated successfully', 'success');
@@ -459,24 +461,318 @@ const TimesheetHistoryScreen: React.FC = () => {
     }
   };
 
+  const generateWeeklyPDF = async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      
+      let PDFLib: any;
+      try {
+        // Use NativeModules as a fallback for the PDF library
+        const { NativeModules } = require('react-native');
+        const Lib = require('react-native-html-to-pdf');
+        PDFLib = Lib.default || Lib;
+        
+        // If the JS wrapper is missing 'convert', check NativeModules
+        if (!PDFLib.convert && NativeModules.RNHTMLtoPDF) {
+          PDFLib = {
+            convert: (options: any) => NativeModules.RNHTMLtoPDF.convert(options)
+          };
+        }
+      } catch (e) {
+        console.error('Error requiring react-native-html-to-pdf:', e);
+      }
+
+      if (!PDFLib || (typeof PDFLib.convert !== 'function' && typeof PDFLib !== 'function')) {
+        throw new Error('PDF library not found or improperly initialized. If you just installed it, please run "npx react-native run-android" again.');
+      }
+      
+      const convertFunc = typeof PDFLib.convert === 'function' ? PDFLib.convert : PDFLib;
+
+      let htmlContent = `
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica', sans-serif; padding: 20px; color: #333; }
+              h1 { color: #262760; text-align: center; margin-bottom: 30px; }
+              .week-container { margin-bottom: 40px; border: 1px solid #eee; padding: 15px; border-radius: 8px; page-break-inside: avoid; }
+              .week-header { background-color: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+              .week-title { font-weight: bold; color: #262760; font-size: 18px; }
+              .week-status { font-weight: bold; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th { background-color: #262760; color: white; text-align: left; padding: 8px; font-size: 12px; }
+              td { border-bottom: 1px solid #eee; padding: 8px; font-size: 11px; }
+              .total-row { background-color: #f1f3f5; font-weight: bold; }
+              .footer { margin-top: 20px; font-size: 10px; color: #777; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <h1>Weekly Timesheet Report</h1>
+      `;
+
+      filteredTimesheets.forEach((timesheet, index) => {
+        const weekRange = formatWeekRange(timesheet.weekStartDate, timesheet.weekEndDate);
+        const status = timesheet.status || 'Draft';
+        const totalHours = toHHMM(getTotalHoursWithBreakValue(timesheet));
+
+        htmlContent += `
+          <div class="week-container">
+            <div class="week-header">
+              <span class="week-title">Week: ${weekRange}</span>
+              <span class="week-status">Status: ${status}</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 25%;">Project</th>
+                  <th style="width: 15%;">Code</th>
+                  <th style="width: 25%;">Task</th>
+                  <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        timesheet.entries.forEach(entry => {
+          const rowTotal = (entry.hours || []).reduce((s, h) => s + (Number(h) || 0), 0);
+          htmlContent += `
+            <tr>
+              <td>${entry.project}</td>
+              <td>${getProjectCode(entry)}</td>
+              <td>${entry.task}</td>
+              <td>${toHHMM(entry.hours[0] || 0)}</td>
+              <td>${toHHMM(entry.hours[1] || 0)}</td>
+              <td>${toHHMM(entry.hours[2] || 0)}</td>
+              <td>${toHHMM(entry.hours[3] || 0)}</td>
+              <td>${toHHMM(entry.hours[4] || 0)}</td>
+              <td>${toHHMM(entry.hours[5] || 0)}</td>
+              <td>${toHHMM(entry.hours[6] || 0)}</td>
+              <td><strong>${toHHMM(rowTotal)}</strong></td>
+            </tr>
+          `;
+        });
+
+        htmlContent += `
+              <tr class="total-row">
+                <td colspan="10" style="text-align: right;">TOTAL HOURS (Work + Break):</td>
+                <td>${totalHours}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `;
+      });
+
+      htmlContent += `
+            <div class="footer">
+              Generated on ${new Date().toLocaleString()} | CALDIM ENGINEERING PVT LTD
+            </div>
+          </body>
+        </html>
+      `;
+
+      const options = {
+        html: htmlContent,
+        fileName: `Timesheet_Weekly_${new Date().getTime()}`,
+        base64: true,
+      };
+
+      const file = await convertFunc(options);
+      
+      if (file.base64) {
+        const fileName = `Timesheet_Weekly_${new Date().getTime()}.pdf`;
+        const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+        await RNFS.writeFile(filePath, file.base64, 'base64');
+        
+        await Share.open({
+          url: `file://${filePath}`,
+          type: 'application/pdf',
+          title: 'Share Weekly Timesheet Report',
+          filename: fileName
+        });
+        showMessage('Success', 'PDF report generated successfully', 'success');
+      } else if (file.filePath) {
+        await Share.open({
+          url: `file://${file.filePath}`,
+          type: 'application/pdf',
+          title: 'Share Weekly Timesheet Report',
+          filename: `Timesheet_Weekly_${new Date().getTime()}.pdf`
+        });
+        showMessage('Success', 'PDF report generated successfully', 'success');
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showMessage('Error', 'Failed to generate PDF report: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const generateMonthlyPDF = async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      
+      let PDFLib: any;
+      try {
+        const { NativeModules } = require('react-native');
+        const Lib = require('react-native-html-to-pdf');
+        PDFLib = Lib.default || Lib;
+        
+        if (!PDFLib.convert && NativeModules.RNHTMLtoPDF) {
+          PDFLib = {
+            convert: (options: any) => NativeModules.RNHTMLtoPDF.convert(options)
+          };
+        }
+      } catch (e) {
+        console.error('Error requiring react-native-html-to-pdf:', e);
+      }
+
+      if (!PDFLib || (typeof PDFLib.convert !== 'function' && typeof PDFLib !== 'function')) {
+        throw new Error('PDF library not found or improperly initialized. If you just installed it, please run "npx react-native run-android" again.');
+      }
+      
+      const convertFunc = typeof PDFLib.convert === 'function' ? PDFLib.convert : PDFLib;
+      
+      const monthlyData: { [key: string]: Timesheet[] } = {};
+      filteredTimesheets.forEach(timesheet => {
+        const monthYear = new Date(timesheet.weekStartDate).toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long' 
+        });
+        if (!monthlyData[monthYear]) monthlyData[monthYear] = [];
+        monthlyData[monthYear].push(timesheet);
+      });
+
+      let htmlContent = `
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica', sans-serif; padding: 20px; color: #333; }
+              h1 { color: #262760; text-align: center; margin-bottom: 30px; }
+              .month-section { margin-bottom: 40px; page-break-after: auto; }
+              .month-title { background-color: #262760; color: white; padding: 10px; border-radius: 4px; font-size: 20px; margin-bottom: 15px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th { background-color: #f1f3f5; color: #262760; text-align: left; padding: 10px; border-bottom: 2px solid #262760; font-size: 12px; }
+              td { border-bottom: 1px solid #eee; padding: 10px; font-size: 11px; }
+              .total-row { background-color: #f8f9fa; font-weight: bold; font-size: 13px; }
+              .footer { margin-top: 20px; font-size: 10px; color: #777; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <h1>Monthly Timesheet Summary</h1>
+      `;
+
+      Object.keys(monthlyData).forEach(monthYear => {
+        const monthTimesheets = monthlyData[monthYear];
+        const monthlyTotal = monthTimesheets.reduce((sum, t) => sum + getTotalHoursWithBreakValue(t), 0);
+
+        htmlContent += `
+          <div class="month-section">
+            <div class="month-title">${monthYear}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 25%;">Week Range</th>
+                  <th style="width: 35%;">Projects</th>
+                  <th style="width: 15%;">Status</th>
+                  <th style="width: 15%;">Hours</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        monthTimesheets.forEach(t => {
+          const projects = Array.from(new Set(t.entries.map(e => e.project))).join(', ');
+          htmlContent += `
+            <tr>
+              <td>${formatWeekRange(t.weekStartDate, t.weekEndDate)}</td>
+              <td>${projects}</td>
+              <td>${t.status}</td>
+              <td>${toHHMM(getTotalHoursWithBreakValue(t))}</td>
+            </tr>
+          `;
+        });
+
+        htmlContent += `
+              <tr class="total-row">
+                <td colspan="3" style="text-align: right;">Monthly Total Hours:</td>
+                <td>${toHHMM(monthlyTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `;
+      });
+
+      htmlContent += `
+            <div class="footer">
+              Generated on ${new Date().toLocaleString()} | CALDIM ENGINEERING PVT LTD
+            </div>
+          </body>
+        </html>
+      `;
+
+      const options = {
+        html: htmlContent,
+        fileName: `Timesheet_Monthly_${new Date().getTime()}`,
+        base64: true,
+      };
+
+      const file = await convertFunc(options);
+      
+      if (file.base64) {
+        const fileName = `Timesheet_Monthly_${new Date().getTime()}.pdf`;
+        const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+        await RNFS.writeFile(filePath, file.base64, 'base64');
+        
+        await Share.open({
+          url: `file://${filePath}`,
+          type: 'application/pdf',
+          title: 'Share Monthly Timesheet Summary',
+          filename: fileName
+        });
+        showMessage('Success', 'PDF report generated successfully', 'success');
+      } else if (file.filePath) {
+        await Share.open({
+          url: `file://${file.filePath}`,
+          type: 'application/pdf',
+          title: 'Share Monthly Timesheet Summary',
+          filename: `Timesheet_Monthly_${new Date().getTime()}.pdf`
+        });
+        showMessage('Success', 'PDF report generated successfully', 'success');
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showMessage('Error', 'Failed to generate PDF report: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDownload = async (): Promise<void> => {
     if (filteredTimesheets.length === 0) {
       showMessage('Info', 'No data available to download.', 'info');
       return;
     }
 
-    if (downloadOption === 'weekly' && downloadFormat === 'excel') {
-      await generateWeeklyExcel();
-    } else if (downloadOption === 'monthly' && downloadFormat === 'excel') {
-      await generateMonthlyExcel();
+    if (downloadOption === 'weekly') {
+      if (downloadFormat === 'excel') {
+        await generateWeeklyExcel();
+      } else {
+        await generateWeeklyPDF();
+      }
     } else {
-      showMessage('Info', 'PDF generation is not yet implemented in mobile version', 'info');
+      if (downloadFormat === 'excel') {
+        await generateMonthlyExcel();
+      } else {
+        await generateMonthlyPDF();
+      }
     }
     
     setShowDownloadModal(false);
   };
 
-  const renderTimesheetItem = ({ item }: { item: Timesheet }): JSX.Element => {
+  const renderTimesheetItem = ({ item }: { item: Timesheet }): React.ReactElement => {
     const projectList = Array.from(new Set((item.entries || []).map(e => e.project))).filter(Boolean);
     const projectCodes = getProjectCodes(item.entries);
     const isDraftTimesheet = isDraft(item);
@@ -579,7 +875,7 @@ const TimesheetHistoryScreen: React.FC = () => {
     );
   };
 
-  const renderFilterModal = (): JSX.Element => (
+  const renderFilterModal = (): React.ReactElement => (
     <Modal
       visible={showFilterModal}
       animationType="slide"
@@ -679,7 +975,7 @@ const TimesheetHistoryScreen: React.FC = () => {
     </Modal>
   );
 
-  const renderDetailsModal = (): JSX.Element => (
+  const renderDetailsModal = (): React.ReactElement => (
     <Modal
       visible={showDetailsModal}
       animationType="slide"
@@ -770,7 +1066,7 @@ const TimesheetHistoryScreen: React.FC = () => {
     </Modal>
   );
 
-  const renderDownloadModal = (): JSX.Element => (
+  const renderDownloadModal = (): React.ReactElement => (
     <Modal
       visible={showDownloadModal}
       animationType="slide"
@@ -909,7 +1205,7 @@ const TimesheetHistoryScreen: React.FC = () => {
     </Modal>
   );
 
-  const renderDeleteConfirmModal = (): JSX.Element => (
+  const renderDeleteConfirmModal = (): React.ReactElement => (
     <Modal
       visible={showDeleteConfirm}
       transparent={true}
@@ -941,7 +1237,7 @@ const TimesheetHistoryScreen: React.FC = () => {
     </Modal>
   );
 
-  const renderMessageDialog = (): JSX.Element => (
+  const renderMessageDialog = (): React.ReactElement => (
     <Modal
       visible={showMessageDialog}
       transparent={true}

@@ -37,7 +37,8 @@ const GlobalSidebar = () => {
     sidebarModules, 
     userRole, 
     userPermissions,
-    closeSidebar 
+    closeSidebar,
+    clearUser
   } = useSidebar();
   const [expandedDropdowns, setExpandedDropdowns] = useState<Record<string, boolean>>({});
 
@@ -58,11 +59,40 @@ const GlobalSidebar = () => {
   };
 
   const handleLogout = () => {
-    toggleSidebar();
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', onPress: () => (navigation as any).replace('Login') }
-    ]);
+    Alert.alert(
+      'Logout', 
+      'Are you sure you want to logout?', 
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          onPress: async () => {
+            try {
+              // Close sidebar first
+              closeSidebar();
+              
+              // Clear state and auth data
+              clearUser();
+              await AsyncStorage.multiRemove(['token', 'user']);
+              
+              // Reset navigation to Login screen
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' as any }],
+              });
+            } catch (error) {
+              console.error('Error during logout:', error);
+              // Fallback navigation
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' as any }],
+              });
+            }
+          } 
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   if (!isSidebarOpen) return null;

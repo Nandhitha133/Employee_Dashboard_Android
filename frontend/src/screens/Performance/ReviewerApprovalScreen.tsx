@@ -699,11 +699,12 @@ const ReviewerApprovalScreen = () => {
                         key={year} 
                         label={year} 
                         value={year} 
-                        color={COLORS.dropdownText} 
+                        color={COLORS.black} 
+                        style={{ backgroundColor: COLORS.white }}
                       />
                     ))
                   ) : (
-                    <PickerItem label="No Years Available" value="" color={COLORS.dropdownText} />
+                    <PickerItem label="No Years Available" value="" color={COLORS.gray} style={{ backgroundColor: COLORS.white }} />
                   )}
                 </Picker>
               </View>
@@ -730,9 +731,9 @@ const ReviewerApprovalScreen = () => {
                   style={styles.picker}
                   dropdownIconColor={COLORS.primary}
                 >
-                  <PickerItem label="All Divisions" value="" color={COLORS.dropdownText} />
+                  <PickerItem label="All Divisions" value="" color={COLORS.gray} style={{ backgroundColor: COLORS.white }} />
                   {uniqueDivisions.map(div => (
-                    <PickerItem key={div} label={div} value={div} color={COLORS.dropdownText} />
+                    <PickerItem key={div} label={div} value={div} color={COLORS.black} style={{ backgroundColor: COLORS.white }} />
                   ))}
                 </Picker>
               </View>
@@ -747,9 +748,9 @@ const ReviewerApprovalScreen = () => {
                   style={styles.picker}
                   dropdownIconColor={COLORS.primary}
                 >
-                  <PickerItem label="All Locations" value="" color={COLORS.dropdownText} />
+                  <PickerItem label="All Locations" value="" color={COLORS.gray} style={{ backgroundColor: COLORS.white }} />
                   {uniqueLocations.map(loc => (
-                    <PickerItem key={loc} label={loc} value={loc} color={COLORS.dropdownText} />
+                    <PickerItem key={loc} label={loc} value={loc} color={COLORS.black} style={{ backgroundColor: COLORS.white }} />
                   ))}
                 </Picker>
               </View>
