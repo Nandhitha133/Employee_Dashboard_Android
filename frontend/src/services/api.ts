@@ -88,10 +88,17 @@ export const navigateToLogin = (): void => {
   }
 };
 
-// Environment-based configuration for Render
-const API_BASE_URL = 'https://employee-react-main.onrender.com/api';
-// const API_BASE_URL = 'http://localhost:5000/api';
-// const API_BASE_URL = 'http://192.168.1.78/api';
+// Environment-based configuration for Render / Local Development
+const getAPI_BASE_URL = () => {
+  if (__DEV__) {
+    // Port 5003 is the backend service port. Use host IP for physical device & emulator connectivity.
+    return 'http://10.69.57.248:5003/api';
+  }
+  return 'https://employee-react-main.onrender.com/api';
+};
+
+const API_BASE_URL = getAPI_BASE_URL();
+
 
 
 // Create axios instance with increased timeout for Render cold starts
@@ -540,6 +547,31 @@ export const holidayAllowanceAPI = {
   saveBulk: (data: any) => api.post('/holiday-allowances/bulk-save', data),
 };
 
+export const conferenceBookingAPI = {
+  getAll: (params?: any) => api.get('/conference-bookings', { params }),
+  create: (data: any) => api.post('/conference-bookings', data),
+  updateStatus: (id: string, data: any) => api.put(`/conference-bookings/${id}/status`, data),
+  block: (data: any) => api.post('/conference-bookings/block', data),
+  delete: (id: string) => api.delete(`/conference-bookings/${id}`),
+};
+
+export const assetAPI = {
+  getAllAssets: () => api.get('/assets'),
+  createAsset: (data: any) => api.post('/assets', data),
+  updateAsset: (id: string, data: any) => api.put(`/assets/${id}`, data),
+  deleteAsset: (id: string) => api.delete(`/assets/${id}`),
+  allocate: (data: any) => api.post('/assets/allocate', data),
+  deallocate: (data: any) => api.post('/assets/deallocate', data),
+  getTickets: () => api.get('/assets/tickets'),
+  createTicket: (data: any) => api.post('/assets/tickets', data),
+  resolveTicket: (id: string, data: any) => api.put(`/assets/tickets/${id}/resolve`, data),
+  getRequests: () => api.get('/assets/requests'),
+  createRequest: (data: any) => api.post('/assets/requests', data),
+  updateRequestStatus: (id: string, status: string) => api.put(`/assets/requests/${id}/status`, { status }),
+  getMaintenance: () => api.get('/assets/maintenance'),
+  createMaintenance: (data: any) => api.post('/assets/maintenance', data),
+};
+
 export const exitFormalityAPI = {
   getAll: (params?: any) => api.get('/exit-formalities', { params }),
   getPending: (params?: any) => api.get('/exit-formalities/pending', { params }),
@@ -605,6 +637,18 @@ export const celebrationAPI = {
   getWishStats: (params?: any) => api.get('/celebrations/stats', { params }),
   sendWish: (data: any) => api.post('/celebrations/wish', data),
   replyWish: (wishId: string, data: any) => api.post(`/celebrations/wish/${wishId}/reply`, data),
+};
+
+export const supportAPI = {
+  createTicket: (formData: any) => api.post('/support/tickets', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  getMyTickets: () => api.get('/support/tickets/my'),
+  getAllTickets: (params?: any) => api.get('/support/tickets/all', { params }),
+  getTicketById: (id: string) => api.get(`/support/tickets/${id}`),
+  updateStatus: (id: string, data: any) => api.put(`/support/tickets/${id}/status`, data),
+  addComment: (id: string, data: any) => api.post(`/support/tickets/${id}/comments`, data),
+  getDashboardStats: () => api.get('/support/dashboard-stats'),
 };
 
 // Helper function to check server status (for Render cold starts)

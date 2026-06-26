@@ -24,7 +24,7 @@ import TimesheetScreen from './src/screens/Timesheet/TimesheetScreen';
 import TimesheetHistoryScreen from './src/screens/Timesheet/TimesheetHistoryScreen';
 import AttendanceRegularizationScreen from './src/screens/Timesheet/AttendanceRegularizationScreen';
 import AdminTimesheetScreen from './src/screens/AdminTimesheet/AdminTimesheetScreen';
-import TimesheetSummaryScreen from './src/screens/AdminTimesheet/TimesheetSummaryScreen'; 
+import TimesheetSummaryScreen from './src/screens/AdminTimesheet/TimesheetSummaryScreen';
 import SalarySlipsScreen from './src/screens/SalarySlips/SalarySlipsScreen';
 import ExpenditureManagementScreen from './src/screens/ExpenditureManagement/ExpenditureManagementScreen';
 import HolidayAllowanceScreen from './src/screens/HolidayAllowanceScreen';
@@ -57,6 +57,12 @@ import RegionalHolidayScreen from './src/screens/LeaveApplications/RegionalHolid
 import MarriageAllowanceScreen from './src/screens/Payroll/MarriageAllowanceScreen';
 import UnifiedHubCalendarScreen from './src/screens/UnifiedHubCalendarScreen';
 import ResumeRepositoryScreen from './src/screens/ResumeRepositoryScreen';
+import RaiseTicketScreen from './src/screens/SupportCenter/RaiseTicketScreen';
+import SupportDashboardScreen from './src/screens/SupportCenter/SupportDashboardScreen';
+import SupportQueueScreen from './src/screens/SupportCenter/SupportQueueScreen';
+import HolidaysAllowanceSummaryScreen from './src/screens/HolidaysAllowanceSummaryScreen';
+import OfficeSyncScreen from './src/screens/OfficeSyncScreen';
+import AssetManagementScreen from './src/screens/AssetManagementScreen';
 
 
 import { SidebarProvider } from './src/context/SidebarContext';
@@ -66,11 +72,11 @@ import GlobalSidebar from './src/components/GlobalSidebar';
 export type RootStackParamList = {
   // Auth
   Login: undefined;
-  
+
   // Main
   Dashboard: { user: any };
   Notifications: undefined;
-  
+
   // Work & Productivity
   Timesheet: undefined;
   TimesheetHistory: undefined;
@@ -86,7 +92,7 @@ export type RootStackParamList = {
   LeaveSummary: undefined;
   LeaveBalance: undefined;
   LeaveApplications: undefined;
-  
+
   // Finance & Payroll
   SalarySlips: undefined;
   PayrollDetails: undefined;
@@ -108,8 +114,8 @@ export type RootStackParamList = {
   TeamManagement: undefined;
   Internships: undefined;
   Announcements: undefined;
-  
-  
+
+
   // Performance Management
   SelfAppraisal: undefined;
   TeamAppraisal: undefined;
@@ -126,15 +132,23 @@ export type RootStackParamList = {
   MarriageAllowance: undefined;
   UnifiedHubCalendar: undefined;
   ResumeRepository: undefined;
-  
+
   // Profile
   MyProfile: { user?: any };
-  
+
   // Reward Tracker
   EmployeeRewardTracker: undefined;
-  
+
   // Exit Form
   EmployeeExitForm: undefined;
+
+  // Support Center
+  RaiseTicket: undefined;
+  SupportDashboard: undefined;
+  SupportQueue: undefined;
+  HolidaysAllowanceSummary: { location?: string, month?: number, year?: number };
+  OfficeSync: undefined;
+  AssetManagement: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -144,83 +158,88 @@ const App = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <SidebarProvider>
-        <StatusBar 
-          barStyle="light-content" 
-          backgroundColor="#1E3A8A"
-          translucent={true}
-        />
-        <NavigationContainer>
-          <GlobalSidebar />
-          <Stack.Navigator 
-            initialRouteName="Login"
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right',
-              contentStyle: { backgroundColor: '#F9FAFB' }
-            }}
-          >
-            {/* Auth Screen */}
-            <Stack.Screen name="Login" component={Login} />
-            
-            {/* Main Dashboard */}
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            
-            {/* Profile Screen */}
-            <Stack.Screen name="MyProfile" component={MyProfileScreen} />
-            
-            {/* Project Allocation Screen */}
-            <Stack.Screen name="ProjectAllocation" component={ProjectAllocationScreen} />
-            <Stack.Screen name="SelfAppraisal" component={SelfAppraisal} />
-            <Stack.Screen name="TeamAppraisal" component={TeamAppraisal} />
-            <Stack.Screen name="ReviewerApproval" component={ReviewerApprovalScreen} />
-            <Stack.Screen name="DirectorApproval" component={DirectorApprovalScreen} />
-            <Stack.Screen name="AppraisalWorkflow" component={AppraisalWorkflowScreen} />
-            <Stack.Screen name="AppraisalMaster" component={AppraisalMasterScreen} />
-            <Stack.Screen name="IncrementSummary" component={IncrementSummaryScreen} />
-            <Stack.Screen name="AttendanceSummary" component={AttendanceSummaryScreen} />
-            <Stack.Screen name="RegionalHoliday" component={RegionalHolidayScreen} />
-            <Stack.Screen name="MarriageAllowance" component={MarriageAllowanceScreen} />
-            <Stack.Screen name="UnifiedHubCalendar" component={UnifiedHubCalendarScreen} />
-            <Stack.Screen name="ResumeRepository" component={ResumeRepositoryScreen} />
-           
-            <Stack.Screen name="Insurance" component={InsuranceScreen} />
-            <Stack.Screen name="LeaveSummary" component={LeaveSummaryScreen} />
-            <Stack.Screen name="LeaveBalance" component={LeaveBalanceScreen} />
-            <Stack.Screen name="LeaveApplications" component={LeaveApplicationsScreen} />
-            <Stack.Screen name="Timesheet" component={TimesheetScreen} />
-            <Stack.Screen name="TimesheetHistory" component={TimesheetHistoryScreen} />
-            <Stack.Screen name="AttendanceRegularization" component={AttendanceRegularizationScreen} />
-            <Stack.Screen name="AdminTimesheet" component={AdminTimesheetScreen} />
-            <Stack.Screen name="TimesheetSummary" component={TimesheetSummaryScreen} />
-            <Stack.Screen name="EditInOutTime" component={EditInOutTimeScreen} />
-            <Stack.Screen name="SpecialPermission" component={SpecialPermissionScreen} />
-            <Stack.Screen name="TimeSheetHistory" component={TimesheetHistoryScreen} />
-            <Stack.Screen name="SalarySlips" component={SalarySlipsScreen} />  
-            <Stack.Screen name="Expenditure" component={ExpenditureManagementScreen} />
-            <Stack.Screen name="HolidaysAllowance" component={HolidayAllowanceScreen} />
-            <Stack.Screen name="PolicyPortal" component={PolicyPortalScreen} />
-            <Stack.Screen name="EmployeeManagement" component={EmployeeManagementScreen} />
-            <Stack.Screen name="Announcements" component={AnnouncementManagementScreen} />
-            <Stack.Screen name="TeamManagement" component={TeamManagementScreen} />
-            <Stack.Screen name="EmployeeRewardTracker" component={EmployeeRewardTrackerScreen} />
-            <Stack.Screen name="EmployeeExitForm" component={EmployeeExitFormScreen} />
-            <Stack.Screen name="PayrollDetails" component={PayrollDetailsScreen} />
-            <Stack.Screen name="CTC" component={CostToTheCompanyScreen} />
-            <Stack.Screen name="CompensationMaster" component={CompensationMasterScreen} />
-            <Stack.Screen name="LoanSummary" component={LoanSummaryScreen} />
-            <Stack.Screen name="GratuitySummary" component={GratuitySummaryScreen} />
-            <Stack.Screen name="MonthlyPayroll" component={MonthlyPayrollScreen} />
-            <Stack.Screen name="Internships" component={InternReferenceScreen} />
-            <Stack.Screen name="ExitApproval" component={ExitApprovalScreen} />
-            <Stack.Screen name="AttendanceApproval" component={AttendanceApprovalScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            <Stack.Screen name="PFGratuitySummary" component={PFGratuitySummaryScreen} />
-            
-            <Stack.Screen name="UserAccess" component={UserAccessScreen} />
-            <Stack.Screen name="EmployeeAttendance" component={EmployeeAttendanceScreen} />
-            
-          </Stack.Navigator>
-        </NavigationContainer>
+          <StatusBar
+            barStyle="light-content"
+            backgroundColor="#1E3A8A"
+            translucent={true}
+          />
+          <NavigationContainer>
+            <GlobalSidebar />
+            <Stack.Navigator
+              initialRouteName="Login"
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                contentStyle: { backgroundColor: '#F9FAFB' }
+              }}
+            >
+              {/* Auth Screen */}
+              <Stack.Screen name="Login" component={Login} />
+
+              {/* Main Dashboard */}
+              <Stack.Screen name="Dashboard" component={DashboardScreen} />
+
+              {/* Profile Screen */}
+              <Stack.Screen name="MyProfile" component={MyProfileScreen} />
+
+              {/* Project Allocation Screen */}
+              <Stack.Screen name="ProjectAllocation" component={ProjectAllocationScreen} />
+              <Stack.Screen name="SelfAppraisal" component={SelfAppraisal} />
+              <Stack.Screen name="TeamAppraisal" component={TeamAppraisal} />
+              <Stack.Screen name="ReviewerApproval" component={ReviewerApprovalScreen} />
+              <Stack.Screen name="DirectorApproval" component={DirectorApprovalScreen} />
+              <Stack.Screen name="AppraisalWorkflow" component={AppraisalWorkflowScreen} />
+              <Stack.Screen name="AppraisalMaster" component={AppraisalMasterScreen} />
+              <Stack.Screen name="IncrementSummary" component={IncrementSummaryScreen} />
+              <Stack.Screen name="AttendanceSummary" component={AttendanceSummaryScreen} />
+              <Stack.Screen name="RegionalHoliday" component={RegionalHolidayScreen} />
+              <Stack.Screen name="MarriageAllowance" component={MarriageAllowanceScreen} />
+              <Stack.Screen name="UnifiedHubCalendar" component={UnifiedHubCalendarScreen} />
+              <Stack.Screen name="ResumeRepository" component={ResumeRepositoryScreen} />
+
+              <Stack.Screen name="Insurance" component={InsuranceScreen} />
+              <Stack.Screen name="LeaveSummary" component={LeaveSummaryScreen} />
+              <Stack.Screen name="LeaveBalance" component={LeaveBalanceScreen} />
+              <Stack.Screen name="LeaveApplications" component={LeaveApplicationsScreen} />
+              <Stack.Screen name="Timesheet" component={TimesheetScreen} />
+              <Stack.Screen name="TimesheetHistory" component={TimesheetHistoryScreen} />
+              <Stack.Screen name="AttendanceRegularization" component={AttendanceRegularizationScreen} />
+              <Stack.Screen name="AdminTimesheet" component={AdminTimesheetScreen} />
+              <Stack.Screen name="TimesheetSummary" component={TimesheetSummaryScreen} />
+              <Stack.Screen name="EditInOutTime" component={EditInOutTimeScreen} />
+              <Stack.Screen name="SpecialPermission" component={SpecialPermissionScreen} />
+              <Stack.Screen name="TimeSheetHistory" component={TimesheetHistoryScreen} />
+              <Stack.Screen name="SalarySlips" component={SalarySlipsScreen} />
+              <Stack.Screen name="Expenditure" component={ExpenditureManagementScreen} />
+              <Stack.Screen name="HolidaysAllowance" component={HolidayAllowanceScreen} />
+              <Stack.Screen name="PolicyPortal" component={PolicyPortalScreen} />
+              <Stack.Screen name="EmployeeManagement" component={EmployeeManagementScreen} />
+              <Stack.Screen name="Announcements" component={AnnouncementManagementScreen} />
+              <Stack.Screen name="TeamManagement" component={TeamManagementScreen} />
+              <Stack.Screen name="EmployeeRewardTracker" component={EmployeeRewardTrackerScreen} />
+              <Stack.Screen name="EmployeeExitForm" component={EmployeeExitFormScreen} />
+              <Stack.Screen name="PayrollDetails" component={PayrollDetailsScreen} />
+              <Stack.Screen name="CTC" component={CostToTheCompanyScreen} />
+              <Stack.Screen name="CompensationMaster" component={CompensationMasterScreen} />
+              <Stack.Screen name="LoanSummary" component={LoanSummaryScreen} />
+              <Stack.Screen name="GratuitySummary" component={GratuitySummaryScreen} />
+              <Stack.Screen name="MonthlyPayroll" component={MonthlyPayrollScreen} />
+              <Stack.Screen name="Internships" component={InternReferenceScreen} />
+              <Stack.Screen name="ExitApproval" component={ExitApprovalScreen} />
+              <Stack.Screen name="AttendanceApproval" component={AttendanceApprovalScreen} />
+              <Stack.Screen name="Notifications" component={NotificationsScreen} />
+              <Stack.Screen name="PFGratuitySummary" component={PFGratuitySummaryScreen} />
+
+              <Stack.Screen name="UserAccess" component={UserAccessScreen} />
+              <Stack.Screen name="EmployeeAttendance" component={EmployeeAttendanceScreen} />
+              <Stack.Screen name="RaiseTicket" component={RaiseTicketScreen} />
+              <Stack.Screen name="SupportDashboard" component={SupportDashboardScreen} />
+              <Stack.Screen name="SupportQueue" component={SupportQueueScreen} />
+              <Stack.Screen name="HolidaysAllowanceSummary" component={HolidaysAllowanceSummaryScreen} />
+              <Stack.Screen name="OfficeSync" component={OfficeSyncScreen} />
+              <Stack.Screen name="AssetManagement" component={AssetManagementScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
         </SidebarProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

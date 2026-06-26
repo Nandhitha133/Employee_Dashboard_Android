@@ -40,6 +40,7 @@ type RootStackParamList = {
   CompensationMaster: undefined;
   MarriageAllowance: undefined;
   HolidaysAllowance: undefined;
+  HolidaysAllowanceSummary: { location?: string, month?: number, year?: number };
   Expenditure: undefined;
   SelfAppraisal: undefined;
   TeamAppraisal: undefined;
@@ -58,7 +59,17 @@ type RootStackParamList = {
   BankOfResumes: undefined;
   Home: undefined;
   RegionalHoliday: undefined;
+  OfficeHolidays: undefined;
   PFGratuitySummary: undefined;
+  PayrollHistory: undefined;
+  PerformancePay: undefined;
+  PromotionHistory: undefined;
+  SupportCenterFolder: undefined;
+  RaiseTicket: undefined;
+  SupportDashboard: undefined;
+  SupportQueue: undefined;
+  AssetManagement: undefined;
+  OfficeSync: undefined;
   LeaveManagementFolder: undefined;
   PayrollManagementFolder: undefined;
   PerformanceManagementFolder: undefined;
@@ -118,8 +129,12 @@ const employeeModulesList = [
   'Leave Applications',
   'Policy Portal',
   'Salary Slips',
+  'Payroll History',
   'Employee Exit Form',
-  'Unified Hub Calendar'
+  'Unified Hub Calendar',
+  'Asset Management',
+  'Office Sync',
+  'Raise Ticket'
 ];
 
 // Complete modules list for sidebar
@@ -365,6 +380,26 @@ const sidebarModulesData: Module[] = [
         permission: 'attendance_summary',
         showForRoles: ['admin', 'hr', 'manager'] 
       },
+      { 
+        name: 'Performance Pay', 
+        description: 'Manage performance pay', 
+        screen: 'PerformancePay', 
+        icon: 'attach-money', 
+        iconFamily: 'MaterialIcons',
+        category: 'Performance Management',
+        permission: 'performance_pay',
+        showForRoles: ['admin', 'hr', 'director'] 
+      },
+      { 
+        name: 'Promotion History', 
+        description: 'View promotion history', 
+        screen: 'PromotionHistory', 
+        icon: 'history', 
+        iconFamily: 'MaterialIcons',
+        category: 'Performance Management',
+        permission: 'promotion_history',
+        showForRoles: ['admin', 'hr'] 
+      },
     ],
   },
   
@@ -397,6 +432,16 @@ const sidebarModulesData: Module[] = [
         iconFamily: 'MaterialCommunityIcons', 
         category: 'Leave Management',
         allowEmployeeRole: true 
+      },
+      { 
+        name: 'Office Holidays', 
+        description: 'View office holidays', 
+        screen: 'OfficeHolidays', 
+        icon: 'event', 
+        iconFamily: 'MaterialIcons', 
+        category: 'Leave Management',
+        permission: 'leave_summary', 
+        showForRoles: ['admin', 'hr'] 
       },
       { 
         name: 'Leave Balance', 
@@ -481,6 +526,17 @@ const sidebarModulesData: Module[] = [
         category: 'Finance & Payroll',
         permission: 'payroll_manage', 
         showForRoles: ['admin', 'hr', 'finance'] 
+      },
+      { 
+        name: 'Payroll History', 
+        description: 'View payroll history', 
+        screen: 'PayrollHistory', 
+        icon: 'history', 
+        iconFamily: 'MaterialIcons',
+        category: 'Finance & Payroll',
+        permission: 'payroll_access', 
+        allowEmployeeRole: true,
+        showForRoles: ['admin', 'hr', 'finance', 'manager', 'projectmanager', 'director'] 
       },
       { 
         name: 'Cost to the Company', 
@@ -733,6 +789,68 @@ const sidebarModulesData: Module[] = [
     permission: 'celebration_view',
     allowEmployeeRole: true,
     order: 27
+  },
+
+  // 28. Support Center
+  {
+    name: 'Support Center',
+    description: 'Support Center',
+    screen: 'SupportCenterFolder',
+    icon: 'support-agent',
+    iconFamily: 'MaterialIcons',
+    category: 'Support Center',
+    permission: 'support_group_access',
+    allowEmployeeRole: true,
+    hasDropdown: true,
+    order: 28,
+    children: [
+      {
+        name: 'Raise Ticket',
+        description: 'Raise a support ticket',
+        screen: 'RaiseTicket',
+        icon: 'add-circle-outline',
+        iconFamily: 'MaterialIcons',
+        category: 'Support Center',
+        permission: 'raise_ticket_access',
+        allowEmployeeRole: true
+      },
+      {
+        name: 'Support Dashboard',
+        description: 'View support dashboard',
+        screen: 'SupportDashboard',
+        icon: 'dashboard',
+        iconFamily: 'MaterialIcons',
+        category: 'Support Center',
+        permission: 'support_dashboard_access',
+        showForRoles: ['admin', 'hr']
+      }
+    ]
+  },
+
+  // 29. Asset Management
+  {
+    name: 'Asset Management',
+    description: 'Manage company assets',
+    screen: 'AssetManagement',
+    icon: 'devices',
+    iconFamily: 'MaterialIcons',
+    category: 'Company & Resources',
+    permission: 'asset_management_access',
+    allowEmployeeRole: true,
+    order: 29,
+  },
+
+  // 30. Office Sync
+  {
+    name: 'Office Sync',
+    description: 'Office synchronization',
+    screen: 'OfficeSync',
+    icon: 'sync',
+    iconFamily: 'MaterialIcons',
+    category: 'Work & Productivity',
+    permission: 'office_sync_access',
+    allowEmployeeRole: true,
+    order: 30,
   },
 
   // Notifications

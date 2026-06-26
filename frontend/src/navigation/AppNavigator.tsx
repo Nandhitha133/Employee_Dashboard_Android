@@ -51,6 +51,13 @@ import ResumeRepositoryScreen from '../screens/ResumeRepositoryScreen';
 import UnifiedHubCalendarScreen from '../screens/UnifiedHubCalendarScreen';
 import EditInOutTimeScreen from '../screens/AdminTimesheet/EditInOutTimeScreen';
 import SpecialPermissionScreen from '../screens/AdminTimesheet/SpecialPermissionScreen';
+import RaiseTicketScreen from '../screens/SupportCenter/RaiseTicketScreen';
+import SupportDashboardScreen from '../screens/SupportCenter/SupportDashboardScreen';
+import SupportQueueScreen from '../screens/SupportCenter/SupportQueueScreen';
+import HolidaysAllowanceSummaryScreen from '../screens/HolidaysAllowanceSummaryScreen';
+import OfficeSyncScreen from '../screens/OfficeSyncScreen';
+import AssetManagementScreen from '../screens/AssetManagementScreen';
+
 // Define user type
 export interface User {
   name: string;
@@ -113,6 +120,12 @@ export type RootStackParamList = {
   UnifiedHubCalendar: undefined;
   EditInOutTime: undefined;
   SpecialPermission: undefined;
+  RaiseTicket: undefined;
+  SupportDashboard: undefined;
+  SupportQueue: undefined;
+  HolidaysAllowanceSummary: { location?: string, month?: number, year?: number };
+  OfficeSync: undefined;
+  AssetManagement: undefined;
   [key: string]: undefined | object;
 };
 
@@ -177,6 +190,12 @@ const AppNavigator = () => {
         <Stack.Screen name="UnifiedHubCalendar" component={UnifiedHubCalendarScreen} />
         <Stack.Screen name="EditInOutTime" component={EditInOutTimeScreen} />
         <Stack.Screen name="SpecialPermission" component={SpecialPermissionScreen} />
+        <Stack.Screen name="RaiseTicket" component={RaiseTicketScreen} />
+        <Stack.Screen name="SupportDashboard" component={SupportDashboardScreen} />
+        <Stack.Screen name="SupportQueue" component={SupportQueueScreen} />
+        <Stack.Screen name="HolidaysAllowanceSummary" component={HolidaysAllowanceSummaryScreen} />
+        <Stack.Screen name="OfficeSync" component={OfficeSyncScreen} />
+        <Stack.Screen name="AssetManagement" component={AssetManagementScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -209,7 +209,7 @@ const HolidaysAllowanceScreen = () => {
         if (selectedLocation) {
           params.location = selectedLocation;
         }
-        const savedRes = await holidayAllowanceAPI.getSummary(params);
+        const savedRes = await holidayAllowanceAPI.list(params);
         if (savedRes && savedRes.data && savedRes.data.success) {
           savedRecords = savedRes.data.data || [];
         } else if (savedRes && savedRes.data && Array.isArray(savedRes.data)) {

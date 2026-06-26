@@ -69,6 +69,8 @@ app.use("/api/holiday-allowances", require("./routes/holidayAllowanceRoutes"));
 app.use("/api/insurance", require("./routes/insurance"));
 app.use("/api/insurance-claims", require("./routes/insuranceClaims"));
 app.use("/api/marriage-allowances", require("./routes/marriageAllowanceRoutes"));
+app.use("/api/conference-bookings", require("./routes/conferenceBookingRoutes"));
+app.use("/api/assets", require("./routes/assetRoutes"));
 
 
 // Announcements Routes
@@ -102,6 +104,9 @@ app.use("/api/notifications", require("./routes/notificationRoutes"));
 
 app.use("/api/special-permissions", require("./routes/specialPermissions"));
 app.use("/api/celebrations", require("./routes/celebrationRoutes"));
+
+// Support Routes
+app.use("/api/support", require("./routes/supportRoutes"));
 
 
 // Base Route

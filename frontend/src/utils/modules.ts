@@ -628,6 +628,32 @@ export const modules: Module[] = [
     order: 27
   },
 
+  // 29. Asset Management
+  {
+    name: 'Asset Management',
+    description: 'Manage company assets',
+    screen: 'AssetManagement' as any,
+    icon: 'desktop-mac',
+    iconFamily: 'MaterialCommunityIcons',
+    category: 'Company & Resources',
+    permission: 'asset_management_access',
+    allowEmployeeRole: true,
+    order: 29,
+  },
+  
+  // 30. Office Sync
+  {
+    name: 'Office Sync',
+    description: 'Office synchronization',
+    screen: 'OfficeSync' as any,
+    icon: 'sync',
+    iconFamily: 'MaterialCommunityIcons',
+    category: 'Work & Productivity',
+    permission: 'office_sync_access',
+    allowEmployeeRole: true,
+    order: 30,
+  },
+
   // Notifications
   { 
     name: 'Notifications', 

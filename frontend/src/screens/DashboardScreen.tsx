@@ -62,6 +62,7 @@ type RootStackParamList = {
   CompensationMaster: undefined;
   MarriageAllowance: undefined;
   HolidaysAllowance: undefined;
+  HolidaysAllowanceSummary: { location?: string, month?: number, year?: number };
   Expenditure: undefined;
   SelfAppraisal: undefined;
   TeamAppraisal: undefined;
@@ -80,7 +81,17 @@ type RootStackParamList = {
   BankOfResumes: undefined;
   Home: undefined;
   RegionalHoliday: undefined;
+  OfficeHolidays: undefined;
   PFGratuitySummary: undefined;
+  PayrollHistory: undefined;
+  PerformancePay: undefined;
+  PromotionHistory: undefined;
+  SupportCenterFolder: undefined;
+  RaiseTicket: undefined;
+  SupportDashboard: undefined;
+  SupportQueue: undefined;
+  AssetManagement: undefined;
+  OfficeSync: undefined;
   // Folder screens
   LeaveManagementFolder: undefined;
   PayrollManagementFolder: undefined;
@@ -221,12 +232,14 @@ const DashboardScreen = () => {
     { name: 'Attendance Approval', description: 'Review and approve attendance', screen: 'AttendanceApproval', icon: 'check-circle', iconFamily: 'MaterialIcons', category: 'Work & Productivity', permission: 'attendance_access', showForRoles: ['admin', 'hr', 'manager', 'projectmanager'], order: 9 },
     { name: 'Project Allocation', description: 'Assign employees to projects', screen: 'ProjectAllocation', icon: 'assignment-ind', iconFamily: 'MaterialIcons', category: 'Work & Productivity', showForRoles: ['admin', 'projectmanager', 'manager'], allowEmployeeRole: false, order: 10 },
     { name: 'Unified Hub Calendar', description: 'View holidays & celebrations', screen: 'UnifiedHubCalendar', icon: 'calendar', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', permission: 'celebration_view', allowEmployeeRole: true, order: 11 },
+    { name: 'Office Sync', description: 'Office synchronization', screen: 'OfficeSync', icon: 'sync', iconFamily: 'MaterialCommunityIcons', category: 'Work & Productivity', permission: 'office_sync_access', allowEmployeeRole: true, order: 11.5 },
     
     // ========== Leave Management ==========
     { name: 'Leave Summary', description: 'View leave summary', screen: 'LeaveSummary', icon: 'chart-bar', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_view', showForRoles: ['admin', 'hr', 'manager'], order: 12 },
     { name: 'Leave Balance', description: 'Check leave balance', screen: 'LeaveBalance', icon: 'wallet', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_view', allowEmployeeRole: true, order: 13 },
     { name: 'Leave Applications', description: 'Apply & track leaves', screen: 'LeaveApplications', icon: 'calendar-check', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_access', allowEmployeeRole: true, order: 14 },
     { name: 'Regional Holiday', description: 'View regional holidays', screen: 'RegionalHoliday', icon: 'calendar-star', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', allowEmployeeRole: true, order: 15 },
+    { name: 'Office Holidays', description: 'View office holidays', screen: 'OfficeHolidays', icon: 'calendar-blank', iconFamily: 'MaterialCommunityIcons', category: 'Leave Management', permission: 'leave_summary', showForRoles: ['admin', 'hr'], order: 15.5 },
     
     // ========== Company & Resources ==========
     { name: 'Insurance', description: 'Manage health & life insurance', screen: 'Insurance', icon: 'shield', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'insurance_access', allowEmployeeRole: true, order: 16 },
@@ -240,6 +253,7 @@ const DashboardScreen = () => {
     { name: 'Team Management', description: 'Manage teams', screen: 'TeamManagement', icon: 'account-multiple', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'team_access', showForRoles: ['admin', 'manager'], order: 24 },
     { name: 'Internships', description: 'Manage interns & references', screen: 'Internships', icon: 'school', iconFamily: 'MaterialIcons', category: 'Company & Resources', permission: 'intern_reference', showForRoles: ['admin', 'hr', 'manager'], order: 25 },
     { name: 'Announcements', description: 'Manage company announcements', screen: 'Announcements', icon: 'bullhorn', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'announcement_manage', showForRoles: ['admin', 'hr', 'manager'], order: 26 },
+    { name: 'Asset Management', description: 'Manage company assets', screen: 'AssetManagement', icon: 'desktop-mac', iconFamily: 'MaterialCommunityIcons', category: 'Company & Resources', permission: 'asset_management_access', allowEmployeeRole: true, order: 26.5 },
     
     // ========== Finance & Payroll ==========
     { name: 'Salary Slips', description: 'View payslips', screen: 'SalarySlips', icon: 'file-document-outline', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', allowEmployeeRole: true, order: 27 },
@@ -253,6 +267,7 @@ const DashboardScreen = () => {
     { name: 'Holiday Allowance', description: 'Manage holiday working allowances', screen: 'HolidaysAllowance', icon: 'beach', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'holiday_allowance', showForRoles: ['admin', 'hr', 'manager'], order: 35 },
     { name: 'Expenditure Management', description: 'Track company expenses', screen: 'Expenditure', icon: 'cash', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'expenditure_access', showForRoles: ['admin', 'hr', 'finance'], order: 36 },
     { name: 'PF & Gratuity Summary', description: 'View PF and gratuity summary', screen: 'PFGratuitySummary', icon: 'file-document-outline', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'payroll_view', showForRoles: ['admin', 'hr', 'finance'], order: 37 },
+    { name: 'Payroll History', description: 'View payroll history', screen: 'PayrollHistory', icon: 'history', iconFamily: 'MaterialCommunityIcons', category: 'Finance & Payroll', permission: 'payroll_access', allowEmployeeRole: true, showForRoles: ['admin', 'hr', 'finance', 'manager', 'projectmanager', 'director'], order: 37.5 },
     
     // ========== Performance Management ==========
     { name: 'Self Appraisal', description: 'Submit self appraisal', screen: 'SelfAppraisal', icon: 'star', iconFamily: 'MaterialCommunityIcons', category: 'Performance Management', permission: 'self_appraisal', allowEmployeeRole: true, order: 38 },
@@ -263,6 +278,12 @@ const DashboardScreen = () => {
     { name: 'Appraisal Master', description: 'Manage employee appraisals', screen: 'AppraisalMaster', icon: 'trending-up', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'appraisal_master', showForRoles: ['admin', 'hr'], order: 43 },
     { name: 'Increment Summary', description: 'View increment summary', screen: 'IncrementSummary', icon: 'summarize', iconFamily: 'MaterialIcons', category: 'Performance Management', permission: 'increment_summary', showForRoles: ['admin', 'hr', 'manager'], order: 44 },
     { name: 'Attendance Summary', description: 'View attendance summary', screen: 'AttendanceSummary', icon: 'clock-check', iconFamily: 'MaterialCommunityIcons', category: 'Performance Management', permission: 'attendance_summary', showForRoles: ['admin', 'hr', 'manager'], order: 45 },
+    { name: 'Performance Pay', description: 'Manage performance pay', screen: 'PerformancePay', icon: 'currency-inr', iconFamily: 'MaterialCommunityIcons', category: 'Performance Management', permission: 'performance_pay', showForRoles: ['admin', 'hr', 'director'], order: 45.1 },
+    { name: 'Promotion History', description: 'View promotion history', screen: 'PromotionHistory', icon: 'history', iconFamily: 'MaterialCommunityIcons', category: 'Performance Management', permission: 'promotion_history', showForRoles: ['admin', 'hr'], order: 45.2 },
+    
+    // ========== Support Center ==========
+    { name: 'Raise Ticket', description: 'Raise a support ticket', screen: 'RaiseTicket', icon: 'ticket', iconFamily: 'MaterialCommunityIcons', category: 'Support Center', permission: 'raise_ticket_access', allowEmployeeRole: true, order: 48.1 },
+    { name: 'Support Dashboard', description: 'View support dashboard', screen: 'SupportDashboard', icon: 'view-dashboard', iconFamily: 'MaterialCommunityIcons', category: 'Support Center', permission: 'support_dashboard_access', showForRoles: ['admin', 'hr'], order: 48.2 },
     
     // ========== Main ==========
     { name: 'Home', description: 'Go to dashboard', screen: 'Home', icon: 'home', category: 'Main', allowEmployeeRole: true, order: 46 },

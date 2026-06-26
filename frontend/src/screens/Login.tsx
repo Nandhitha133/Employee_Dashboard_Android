@@ -91,8 +91,8 @@ const COLORS = {
 };
 
 // Create a separate component for Forgot Password Modal to isolate re-renders
-const ForgotPasswordModal = React.memo(({ 
-    visible, 
+const ForgotPasswordModal = React.memo(({
+    visible,
     onClose,
     onSendOtp,
     onResetPassword,
@@ -100,43 +100,37 @@ const ForgotPasswordModal = React.memo(({
     isResetting,
     otpSecondsLeft,
     canResendOtp,
-    onResendOtp
+    onResendOtp,
+    step
 }: {
     visible: boolean;
     onClose: () => void;
-    onSendOtp: (employeeId: string) => void;
-    onResetPassword: (otp: string, password: string) => void;
+    onSendOtp: (employeeId: string) => Promise<void>;
+    onResetPassword: (otp: string, password: string) => Promise<void>;
     isSendingOtp: boolean;
     isResetting: boolean;
     otpSecondsLeft: number;
     canResendOtp: boolean;
-    onResendOtp: (employeeId: string) => void;
+    onResendOtp: (employeeId: string) => Promise<void>;
+    step: number;
 }) => {
-    const [step, setStep] = useState(1);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
-    
-    // Use refs for uncontrolled inputs
-    const employeeIdRef = useRef<TextInput>(null);
-    const otpRef = useRef<TextInput>(null);
-    const newPasswordRef = useRef<TextInput>(null);
-    
-    // Store values in refs to avoid state updates during typing
-    const employeeIdValue = useRef('');
-    const otpValue = useRef('');
-    const passwordValue = useRef('');
+
+    const [employeeId, setEmployeeId] = useState('');
+    const [otp, setOtp] = useState('');
+    const [newPassword, setNewPassword] = useState('');
 
     // Reset state when modal opens/closes
     useEffect(() => {
         if (!visible) {
-            setStep(1);
             setShowNewPassword(false);
             setMessage('');
             setMessageType('');
-            employeeIdValue.current = '';
-            otpValue.current = '';
-            passwordValue.current = '';
+            setEmployeeId('');
+            setOtp('');
+            setNewPassword('');
         }
     }, [visible]);
 
@@ -146,41 +140,58 @@ const ForgotPasswordModal = React.memo(({
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    const handleSendOtp = () => {
-        const empId = employeeIdValue.current.trim();
+    const handleSendOtp = async () => {
+        const empId = employeeId.trim();
         if (!empId) {
             setMessage('Please enter Employee ID');
             setMessageType('error');
             return;
         }
         setMessage('');
-        onSendOtp(empId);
+        try {
+            await onSendOtp(empId);
+            setMessage('OTP sent to your email');
+            setMessageType('success');
+        } catch (error) {
+            // error handled by parent
+        }
     };
 
-    const handleResendOtp = () => {
-        const empId = employeeIdValue.current.trim();
+    const handleResendOtp = async () => {
+        const empId = employeeId.trim();
         if (!empId) return;
-        onResendOtp(empId);
+        setMessage('');
+        try {
+            await onResendOtp(empId);
+            setMessage('OTP resent to your email');
+            setMessageType('success');
+        } catch (error) {
+            // error handled by parent
+        }
     };
 
-    const handleResetPassword = () => {
-        const otp = otpValue.current.trim();
-        const password = passwordValue.current.trim();
+    const handleResetPassword = async () => {
+        const currentOtp = otp.trim();
+        const currentPassword = newPassword.trim();
 
-        if (!otp || !password) {
+        if (!currentOtp || !currentPassword) {
             setMessage('Please fill all fields');
             setMessageType('error');
             return;
         }
 
-        if (password.length < 6) {
+        if (currentPassword.length < 6) {
             setMessage('Password must be at least 6 characters');
             setMessageType('error');
             return;
         }
 
         setMessage('');
-        onResetPassword(otp, password);
+        try {
+            await onResetPassword(currentOtp, currentPassword);
+        } catch (error) {
+            // error handled by parent
+        }
     };
 
     return (
@@ -202,7 +213,7 @@ const ForgotPasswordModal = React.memo(({
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView 
+                    <ScrollView
                         showsVerticalScrollIndicator={false}
                         keyboardShouldPersistTaps="handled"
                     >
@@ -216,20 +227,16 @@ const ForgotPasswordModal = React.memo(({
                                 <View style={styles.inputContainer}>
                                     <Text style={styles.inputLabel}>Employee ID</Text>
                                     <TextInput
-                                        ref={employeeIdRef}
                                         style={styles.input}
                                         placeholder="Enter your employee ID"
                                         placeholderTextColor="#999"
-                                        defaultValue={employeeIdValue.current}
+                                        value={employeeId}
                                         onChangeText={(text) => {
-                                            const formatted = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-                                            employeeIdValue.current = formatted;
-                                            if (employeeIdRef.current) {
-                                                employeeIdRef.current.setNativeProps({ text: formatted });
-                                            }
+                                            const formatted = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+                                            setEmployeeId(formatted);
                                         }}
                                         autoCapitalize="characters"
-                                        maxLength={6}
+                                        maxLength={20}
                                         editable={!isSendingOtp}
                                     />
                                 </View>
@@ -241,20 +248,14 @@ const ForgotPasswordModal = React.memo(({
                                     <View style={styles.inputContainer}>
                                         <Text style={styles.inputLabel}>OTP</Text>
                                         <TextInput
-                                            ref={otpRef}
                                             style={styles.input}
                                             placeholder="Enter OTP"
                                             placeholderTextColor="#999"
-                                            defaultValue={otpValue.current}
+                                            value={otp}
                                             onChangeText={(text) => {
-                                                const formatted = text.replace(/[^0-9]/g, '').slice(0, 6);
-                                                otpValue.current = formatted;
-                                                if (otpRef.current) {
-                                                    otpRef.current.setNativeProps({ text: formatted });
-                                                }
+                                                // Removed strict digit constraint to match web
+                                                setOtp(text);
                                             }}
-                                            keyboardType="numeric"
-                                            maxLength={6}
                                             editable={!isResetting}
                                         />
                                         <View style={styles.otpTimerContainer}>
@@ -285,19 +286,14 @@ const ForgotPasswordModal = React.memo(({
                                         <Text style={styles.inputLabel}>New Password</Text>
                                         <View style={styles.passwordContainer}>
                                             <TextInput
-                                                ref={newPasswordRef}
                                                 style={[styles.input, styles.passwordInput]}
                                                 placeholder="Enter new password"
                                                 placeholderTextColor="#999"
                                                 secureTextEntry={!showNewPassword}
-                                                defaultValue={passwordValue.current}
+                                                value={newPassword}
                                                 onChangeText={(text) => {
-                                                    passwordValue.current = text;
-                                                    if (newPasswordRef.current) {
-                                                        newPasswordRef.current.setNativeProps({ text });
-                                                    }
+                                                    setNewPassword(text);
                                                 }}
-                                                maxLength={16}
                                                 editable={!isResetting}
                                             />
                                             <TouchableOpacity
@@ -401,9 +397,9 @@ const Login = () => {
     const [forgotPasswordStep, setForgotPasswordStep] = useState(1);
     const [isSendingOtp, setIsSendingOtp] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
-    const [otpSecondsLeft, setOtpSecondsLeft] = useState(60);
+    const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
     const [canResendOtp, setCanResendOtp] = useState(false);
-    
+
     // Store employeeId for resend OTP
     const forgotEmployeeIdRef = useRef('');
 
@@ -491,7 +487,7 @@ const Login = () => {
             const savedEmployeeId = await AsyncStorage.getItem('savedEmployeeId');
             const savedPassword = await AsyncStorage.getItem('savedPassword');
             const rememberMeFlag = await AsyncStorage.getItem('rememberMe');
-            
+
             if (rememberMeFlag === 'true' && savedEmployeeId && savedPassword) {
                 setFormData({
                     employeeId: savedEmployeeId,
@@ -513,42 +509,46 @@ const Login = () => {
     }, [error]);
 
     const handleSendOtp = async (employeeId: string) => {
-        if (!employeeId) return;
+        if (!employeeId) return Promise.reject(new Error('No Employee ID'));
 
         forgotEmployeeIdRef.current = employeeId;
         setIsSendingOtp(true);
 
         try {
-            await authAPI.forgotPassword({ 
-                employeeId 
+            await authAPI.forgotPassword({
+                employeeId
             });
 
             setForgotPasswordStep(2);
-            setOtpSecondsLeft(60);
+            setOtpSecondsLeft(300);
             setCanResendOtp(false);
+            return Promise.resolve();
         } catch (error: any) {
             console.error('Send OTP error:', error);
             Alert.alert('Error', error.response?.data?.message || 'Failed to send OTP');
+            return Promise.reject(error);
         } finally {
             setIsSendingOtp(false);
         }
     };
 
     const handleResendOtp = async (employeeId: string) => {
-        if (!canResendOtp || !employeeId) return;
-        
+        if (!canResendOtp || !employeeId) return Promise.reject(new Error('Cannot resend'));
+
         setIsSendingOtp(true);
 
         try {
-            await authAPI.forgotPassword({ 
-                employeeId 
+            await authAPI.forgotPassword({
+                employeeId
             });
 
-            setOtpSecondsLeft(60);
+            setOtpSecondsLeft(300);
             setCanResendOtp(false);
+            return Promise.resolve();
         } catch (error: any) {
             console.error('Resend OTP error:', error);
             Alert.alert('Error', error.response?.data?.message || 'Failed to resend OTP');
+            return Promise.reject(error);
         } finally {
             setIsSendingOtp(false);
         }
@@ -567,9 +567,11 @@ const Login = () => {
             Alert.alert('Success', 'Password reset successfully. Please login with your new password.');
             setShowForgotPassword(false);
             setForgotPasswordStep(1);
+            return Promise.resolve();
         } catch (error: any) {
             console.error('Reset password error:', error);
             Alert.alert('Error', error.response?.data?.message || 'Failed to reset password');
+            return Promise.reject(error);
         } finally {
             setIsResetting(false);
         }
@@ -594,7 +596,7 @@ const Login = () => {
 
             await AsyncStorage.setItem('token', loginData.token);
             await AsyncStorage.setItem('user', JSON.stringify(loginData.user));
-            
+
             if (rememberMe) {
                 await AsyncStorage.setItem('savedEmployeeId', formData.employeeId);
                 await AsyncStorage.setItem('savedPassword', formData.password);
@@ -612,7 +614,7 @@ const Login = () => {
             } catch (profileError) {
                 console.error('Error fetching profile:', profileError);
             }
-            
+
             const userData: UserData = {
                 id: loginData.user.id,
                 name: loginData.user.name || formData.employeeId,
@@ -627,7 +629,7 @@ const Login = () => {
             navigation.replace('Dashboard', { user: userData });
         } catch (error: any) {
             console.error('Login error:', error);
-            
+
             if (error.response?.status === 401) {
                 setError('Invalid Employee ID or Password');
             } else if (error.response?.status === 403) {
@@ -649,7 +651,7 @@ const Login = () => {
     const closeForgotPassword = useCallback(() => {
         setShowForgotPassword(false);
         setForgotPasswordStep(1);
-        setOtpSecondsLeft(60);
+        setOtpSecondsLeft(300);
         setCanResendOtp(false);
         forgotEmployeeIdRef.current = '';
     }, []);
@@ -772,6 +774,7 @@ const Login = () => {
                 isResetting={isResetting}
                 otpSecondsLeft={otpSecondsLeft}
                 canResendOtp={canResendOtp}
+                step={forgotPasswordStep}
             />
 
             {/* Main Content */}
@@ -860,7 +863,7 @@ const Login = () => {
                                     <Text style={styles.rememberMeText}>Remember me</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     onPress={() => setShowForgotPassword(true)}
                                     disabled={isLoading}
                                 >

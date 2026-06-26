@@ -31,6 +31,7 @@ interface CommonHeaderProps {
   currentTime?: string;
   greeting?: string;
   userName?: string;
+  backgroundColor?: string;
 }
 
 const CommonHeader: React.FC<CommonHeaderProps> = ({
@@ -44,6 +45,7 @@ const CommonHeader: React.FC<CommonHeaderProps> = ({
   currentTime,
   greeting,
   userName,
+  backgroundColor,
 }) => {
   const navigation = useNavigation();
   const { toggleSidebar } = useSidebar();
@@ -65,8 +67,8 @@ const CommonHeader: React.FC<CommonHeaderProps> = ({
   };
 
   return (
-    <View style={styles.header}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+    <View style={[styles.header, backgroundColor ? { backgroundColor } : null]}>
+      <StatusBar barStyle="light-content" backgroundColor={backgroundColor || COLORS.primary} />
       
       <View style={styles.headerTop}>
         <View style={styles.headerLeft}>

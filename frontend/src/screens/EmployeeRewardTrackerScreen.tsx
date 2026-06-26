@@ -103,7 +103,14 @@ const EmployeeRewardTrackerScreen = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  const API_BASE_URL = 'https://employee-react-main.onrender.com'; // Your Render URL
+  const getAPI_BASE_URL = () => {
+    if (__DEV__) {
+      return 'http://10.69.57.248:5003';
+    }
+    return 'https://employee-react-main.onrender.com';
+  };
+
+  const API_BASE_URL = getAPI_BASE_URL();
 
   // Predefined nominators
   const predefinedNominators = ['Arunkumar.P', 'Arunkumar.D', 'Harishankar', 'Gopinath'];
